@@ -626,6 +626,14 @@ class RecordsProviderLttng(RuntimeDataProvider):
         intra_record = self._compose_intra_proc_comm_records(communication_value)
         return len(intra_record) > 0
 
+    def verify_communication(
+        self,
+        communication: CommunicationStructValue,
+    ) -> bool:
+        is_intra_proc = self.is_intra_process_communication(communication)
+        self._lttng.get_count()
+        raise NotImplementedError('')
+
     def _compose_intra_proc_comm_records(
         self,
         comm_info: CommunicationStructValue,

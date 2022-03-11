@@ -23,6 +23,7 @@ from .node_path import NodePath
 from .path_base import PathBase
 from ..common import Columns, Summarizable, Summary, Util
 from ..exceptions import InvalidArgumentError, InvalidRecordsError
+from ..infra import RecordsProvider
 from ..record.record import merge, merge_sequencial, RecordsInterface
 from ..value_objects import CallbackChain, PathStructValue
 
@@ -223,7 +224,7 @@ class Path(PathBase, Summarizable):
                 msg = 'Node latency is empty. To see more details, execute [ path.verify() ].'
                 logger.warning(msg)
 
-    def verify(self) -> bool:
+    def verify(self, provider: Optional[RecordsProvider] = None) -> bool:
         is_valid = True
         for child in self.node_paths[1:-1]:
             if child.message_context is not None:
@@ -234,6 +235,9 @@ class Path(PathBase, Summarizable):
             msg += str(child.summary)
             logger.warning(msg)
             is_valid = False
+        if provider is not None:
+            for comm in self.communications:
+                is_valid &= comm.verify(provider)
         return is_valid
 
     def get_child(self, name: str):
