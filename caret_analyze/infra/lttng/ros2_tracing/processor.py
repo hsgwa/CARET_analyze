@@ -104,6 +104,34 @@ class Ros2Handler(EventHandler):
             self._handle_tilde_subscribe_added
         handler_map['ros2_caret:sim_time'] = \
             self._handle_sim_time
+        handler_map['ros2_caret:symbol_rename'] = \
+            self._handle_symbol_rename
+        handler_map['ros2_caret:init_bind_transform_broadcaster'] = \
+            self._handle_transform_broadcaster
+        handler_map['ros2_caret:init_bind_transform_broadcaster_frames'] = \
+            self._handle_transform_broadcaster_frames
+        handler_map['ros2_caret:construct_tf_buffer'] = \
+            self._handle_construct_tf_buffer
+        handler_map['ros2_caret:init_bind_tf_buffer_core'] = \
+            self._handle_init_bind_tf_buffer_core
+        handler_map['ros2_caret:construct_node_hook'] = \
+            self._handle_construct_node_hook
+        handler_map['ros2_caret:send_transform'] = \
+            self._handle_send_transform
+        handler_map['ros2_caret:init_tf_broadcaster_frame_id_compact'] = \
+            self._handle_init_tf_broadcaster_frame_id_compact
+        handler_map['ros2_caret:init_tf_buffer_frame_id_compact'] = \
+            self._handle_init_tf_buffer_frame_id_compact
+        handler_map['ros2_caret:tf_lookup_transform_start'] = \
+            self._handle_tf_lookup_transform_start
+        handler_map['ros2_caret:tf_lookup_transform_end'] = \
+            self._handle_tf_lookup_transform_end
+        handler_map['ros2_caret:init_bind_tf_buffer_cache'] = \
+            self._handle_init_bind_tf_buffer_cache
+        handler_map['ros2_caret:tf_buffer_find_closest'] = \
+            self._handle_tf_buffer_find_closest
+        handler_map['ros2_caret:tf_set_transform'] = \
+            self._handle_tf_set_transform
 
         super().__init__(
             handler_map=handler_map,
@@ -336,10 +364,13 @@ class Ros2Handler(EventHandler):
         # Add to dict
         callback = get_field(event, 'callback')
         timestamp = metadata.timestamp
-        is_intra_process = get_field(
-            event, 'is_intra_process', raise_if_not_found=False)
+        tid = metadata.tid
+        is_intra_process = get_field(event, 'is_intra_process', raise_if_not_found=False)
         self.data.add_callback_start_instance(
-            timestamp, callback, is_intra_process)
+            timestamp,
+            tid,
+            callback,
+            is_intra_process)
 
     def _handle_callback_end(
         self,
@@ -348,8 +379,13 @@ class Ros2Handler(EventHandler):
     ) -> None:
         # Fetch from dict
         callback = get_field(event, 'callback')
+        tid = metadata.tid
         timestamp = metadata.timestamp
-        self.data.add_callback_end_instance(timestamp, callback)
+        self.data.add_callback_end_instance(
+            timestamp,
+            tid,
+            callback
+        )
 
     def _handle_rcl_lifecycle_state_machine_init(
         self,
@@ -511,7 +547,8 @@ class Ros2Handler(EventHandler):
         executor_addr = get_field(event, 'executor_addr')
         collector_addr = get_field(event, 'entities_collector_addr')
         executor_type_name = get_field(event, 'executor_type_name')
-        self.data.add_executor_static(executor_addr, collector_addr, stamp, executor_type_name)
+        self.data.add_executor_static(
+            executor_addr, collector_addr, stamp, executor_type_name)
 
     def _handle_add_callback_group(
         self,
@@ -522,7 +559,8 @@ class Ros2Handler(EventHandler):
         executor_addr = get_field(event, 'executor_addr')
         callback_group_addr = get_field(event, 'callback_group_addr')
         group_type_name = get_field(event, 'group_type_name')
-        self.data.add_callback_group(executor_addr, stamp, callback_group_addr, group_type_name)
+        self.data.add_callback_group(
+            executor_addr, stamp, callback_group_addr, group_type_name)
 
     def _handle_add_callback_group_static_executor(
         self,
@@ -544,7 +582,8 @@ class Ros2Handler(EventHandler):
         stamp = metadata.timestamp
         callback_group_addr = get_field(event, 'callback_group_addr')
         timer_handle = get_field(event, 'timer_handle')
-        self.data.callback_group_add_timer(callback_group_addr, stamp, timer_handle)
+        self.data.callback_group_add_timer(
+            callback_group_addr, stamp, timer_handle)
 
     def _handle_callback_group_add_subscription(
         self,
@@ -554,7 +593,8 @@ class Ros2Handler(EventHandler):
         stamp = metadata.timestamp
         callback_group_addr = get_field(event, 'callback_group_addr')
         subscription_handle = get_field(event, 'subscription_handle')
-        self.data.callback_group_add_subscription(callback_group_addr, stamp, subscription_handle)
+        self.data.callback_group_add_subscription(
+            callback_group_addr, stamp, subscription_handle)
 
     def _handle_callback_group_add_service(
         self,
@@ -564,7 +604,8 @@ class Ros2Handler(EventHandler):
         stamp = metadata.timestamp
         callback_group_addr = get_field(event, 'callback_group_addr')
         service_handle = get_field(event, 'service_handle')
-        self.data.callback_group_add_service(callback_group_addr, stamp, service_handle)
+        self.data.callback_group_add_service(
+            callback_group_addr, stamp, service_handle)
 
     def _handle_callback_group_add_client(
         self,
@@ -574,7 +615,8 @@ class Ros2Handler(EventHandler):
         stamp = metadata.timestamp
         callback_group_addr = get_field(event, 'callback_group_addr')
         client_handle = get_field(event, 'client_handle')
-        self.data.callback_group_add_client(callback_group_addr, stamp, client_handle)
+        self.data.callback_group_add_client(
+            callback_group_addr, stamp, client_handle)
 
     def _handle_tilde_subscription_init(
         self,
@@ -585,7 +627,8 @@ class Ros2Handler(EventHandler):
         subscription = get_field(event, 'subscription')
         node_name = get_field(event, 'node_name')
         topic_name = get_field(event, 'topic_name')
-        self.data.add_tilde_subscription(subscription, node_name, topic_name, timestamp)
+        self.data.add_tilde_subscription(
+            subscription, node_name, topic_name, timestamp)
 
     def _handle_tilde_publisher_init(
         self,
@@ -596,7 +639,8 @@ class Ros2Handler(EventHandler):
         publisher = get_field(event, 'publisher')
         node_name = get_field(event, 'node_name')
         topic_name = get_field(event, 'topic_name')
-        self.data.add_tilde_publisher(publisher, node_name, topic_name, timestamp)
+        self.data.add_tilde_publisher(
+            publisher, node_name, topic_name, timestamp)
 
     def _handle_tilde_subscribe(
         self,
@@ -606,23 +650,24 @@ class Ros2Handler(EventHandler):
         timestamp = metadata.timestamp
         subscription = get_field(event, 'subscription')
         tilde_message_id = get_field(event, 'tilde_message_id')
-        self.data.add_tilde_subscribe(timestamp, subscription, tilde_message_id)
+        self.data.add_tilde_subscribe(
+            timestamp, subscription, tilde_message_id)
 
     def _handle_tilde_publish(
         self,
         event: Dict,
         metadata: EventMetadata
     ) -> None:
-        # timestamp = metadata.timestamp
         publisher = get_field(event, 'publisher')
-        publish_tilde_timestamp = get_field(event, 'tilde_publish_timestamp')
-        tilde_message_id = get_field(event, 'tilde_message_id')
-        subscription_id = get_field(event, 'subscription_id')
-        self.data.add_tilde_publish(
-            publish_tilde_timestamp,
-            publisher,
-            subscription_id,
-            tilde_message_id)
+        publish_tilde_timestamp = metadata.timestamp
+        message_info_ids = get_field(event, 'message_info_ids')
+        message_ids = get_field(event, 'message_ids')
+        for message_info_id, message_id in zip(message_info_ids, message_ids):
+            self.data.add_tilde_publish(
+                publish_tilde_timestamp,
+                publisher,
+                message_info_id,
+                message_id)
 
     def _handle_tilde_subscribe_added(
         self,
@@ -633,7 +678,8 @@ class Ros2Handler(EventHandler):
         subscription_id = get_field(event, 'subscription_id')
         node_name = get_field(event, 'node_name')
         topic_name = get_field(event, 'topic_name')
-        self.data.add_tilde_subscribe_added(subscription_id, node_name, topic_name, timestamp)
+        self.data.add_tilde_subscribe_added(
+            subscription_id, node_name, topic_name, timestamp)
 
     def _handle_sim_time(
         self,
@@ -643,3 +689,209 @@ class Ros2Handler(EventHandler):
         timestamp = metadata.timestamp
         sim_time = get_field(event, 'stamp')
         self.data.add_sim_time(timestamp, sim_time)
+
+    def _handle_symbol_rename(
+        self,
+        event: Dict,
+        metadata: EventMetadata
+    ) -> None:
+        timestamp = metadata.timestamp
+        symbol_from = get_field(event, 'symbol_from')
+        symbol_to = get_field(event, 'symbol_to')
+        self.data.add_symbol_rename(timestamp, symbol_from, symbol_to)
+
+    def _handle_transform_broadcaster(
+        self,
+        event: Dict,
+        metadata: EventMetadata
+    ) -> None:
+        timestamp = metadata.timestamp
+        broadcaster = get_field(event, 'tf_broadcaster')
+        publisher_handle = get_field(event, 'publisher_handle')
+        self.data.add_transform_broadcaster(
+            timestamp, broadcaster, publisher_handle)
+
+    def _handle_transform_broadcaster_frames(
+        self,
+        event: Dict,
+        metadata: EventMetadata
+    ) -> None:
+        timestamp = metadata.timestamp
+        broadcaster = get_field(event, 'tf_broadcaster')
+        frame_id = get_field(event, 'frame_id')
+        child_frame_id = get_field(event, 'child_frame_id')
+        self.data.add_transform_broadcaster_frames(
+            timestamp, broadcaster, frame_id, child_frame_id)
+
+    def _handle_construct_tf_buffer(
+        self,
+        event: Dict,
+        metadata: EventMetadata
+    ) -> None:
+        vtid = get_field(event, 'vtid')
+        timestamp = metadata.timestamp
+        buffer = get_field(event, 'tf_buffer')
+        buffer_core = get_field(event, 'tf_buffer_core')
+        clock = get_field(event, 'clock')
+        self.data.add_construct_tf_buffer(vtid, timestamp, buffer, buffer_core, clock)
+
+    def _handle_init_bind_tf_buffer_core(
+        self,
+        event: Dict,
+        metadata: EventMetadata
+    ) -> None:
+        timestamp = metadata.timestamp
+        buffer_core = get_field(event, 'tf_buffer_core')
+        callback = get_field(event, 'callback')
+        self.data.add_init_bind_tf_buffer_core(timestamp, buffer_core, callback)
+
+    def _handle_construct_node_hook(
+        self,
+        event: Dict,
+        metadata: EventMetadata
+    ) -> None:
+        timestamp = metadata.timestamp
+        node_handle = get_field(event, 'node_handle')
+        clock = get_field(event, 'clock')
+        self.data.add_construct_node_hook(timestamp, node_handle, clock)
+
+    def _handle_send_transform(
+        self,
+        event: Dict,
+        metadata: EventMetadata
+    ) -> None:
+        timestamp = metadata.timestamp
+        broadcaster = get_field(event, 'tf_broadcaster')
+        stamps = get_field(event, 'stamps')
+        frame_ids_compact = get_field(event, 'frame_ids_compact')
+        child_frame_ids_compact = get_field(event, 'child_frame_ids_compact')
+        for i in range(len(child_frame_ids_compact)):
+            self.data.add_send_transform(
+                timestamp,
+                broadcaster,
+                stamps[i],
+                frame_ids_compact[i],
+                child_frame_ids_compact[i],
+            )
+
+    def _handle_init_tf_broadcaster_frame_id_compact(
+        self,
+        event: Dict,
+        metadata: EventMetadata
+    ) -> None:
+        timestamp = metadata.timestamp
+        broadcaster = get_field(event, 'tf_broadcaster')
+        frame_id = get_field(event, 'frame_id')
+        frame_id_compact = get_field(event, 'frame_id_compact')
+        self.data.add_broadcaster_frame_id_compact(
+            timestamp,
+            broadcaster,
+            frame_id,
+            frame_id_compact
+        )
+
+    def _handle_init_tf_buffer_frame_id_compact(
+        self,
+        event: Dict,
+        metadata: EventMetadata
+    ) -> None:
+        timestamp = metadata.timestamp
+        transform_buffer_core = get_field(event, 'tf_buffer_core')
+        frame_id = get_field(event, 'frame_id')
+        frame_id_compact = get_field(event, 'frame_id_compact')
+        self.data.add_buffer_frame_id_compact(
+            timestamp,
+            transform_buffer_core,
+            frame_id,
+            frame_id_compact
+        )
+
+    def _handle_tf_lookup_transform_start(
+        self,
+        event: Dict,
+        metadata: EventMetadata
+    ) -> None:
+        timestamp = metadata.timestamp
+        buffer_core = get_field(event, 'tf_buffer_core')
+        target_time = get_field(event, 'target_time')
+        frame_id_compact = get_field(event, 'frame_id_compact')
+        child_frame_id_compact = get_field(event, 'child_frame_id_compact')
+        self.data.add_tf_lookup_transform_start(
+            timestamp,
+            buffer_core,
+            target_time,
+            frame_id_compact,
+            child_frame_id_compact
+        )
+
+    def _handle_tf_lookup_transform_end(
+        self,
+        event: Dict,
+        metadata: EventMetadata
+    ) -> None:
+        timestamp = metadata.timestamp
+        buffer_core = get_field(event, 'tf_buffer_core')
+        self.data.add_tf_lookup_transform_end(
+            timestamp,
+            buffer_core,
+        )
+
+    def _handle_init_bind_tf_buffer_cache(
+        self,
+        event: Dict,
+        metadata: EventMetadata
+    ) -> None:
+        timestamp = metadata.timestamp
+        buffer_core = get_field(event, 'tf_buffer_core')
+        buffer_cache = get_field(event, 'tf_buffer_cache')
+        self.data.add_init_bind_tf_buffer_cache(
+            timestamp,
+            buffer_core,
+            buffer_cache
+        )
+
+    def _handle_tf_buffer_find_closest(
+        self,
+        event: Dict,
+        metadata: EventMetadata
+    ) -> None:
+        timestamp = metadata.timestamp
+        buffer_core = get_field(event, 'tf_buffer_core')
+        frame_id_compact = get_field(event, 'frame_id_compact')
+        child_frame_id_compact = get_field(event, 'child_frame_id_compact')
+        stamp = get_field(event, 'stamp')
+        frame_id_compact_ = get_field(event, 'frame_id_compact_')
+        child_frame_id_compact_ = get_field(event, 'child_frame_id_compact_')
+        stamp_ = get_field(event, 'stamp_')
+
+        self.data.add_tf_find_closest(
+            timestamp,
+            buffer_core,
+            frame_id_compact,
+            child_frame_id_compact,
+            stamp,
+            frame_id_compact_,
+            child_frame_id_compact_,
+            stamp_
+        )
+
+    def _handle_tf_set_transform(
+        self,
+        event: Dict,
+        metadata: EventMetadata
+    ) -> None:
+        timestamp = metadata.timestamp
+        buffer_core = get_field(event, 'tf_buffer_core')
+        stamp = get_field(event, 'stamp')
+        tid = metadata.tid
+        frame_id_compact = get_field(event, 'frame_id_compact')
+        child_frame_id_compact = get_field(event, 'child_frame_id_compact')
+
+        self.data.add_tf_set_transform(
+            timestamp,
+            tid,
+            buffer_core,
+            stamp,
+            frame_id_compact,
+            child_frame_id_compact,
+        )

@@ -19,9 +19,9 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 from record_cpp_impl import RecordBase, RecordsBase
 
-from .column import Column
+from .column import Column, Columns
 from .record import RecordInterface, Records, RecordsInterface, validate_rename_rule
-from ..common import Columns, Progress
+from ..common import Progress
 from ..exceptions import InvalidArgumentError, ItemNotFoundError
 
 
@@ -148,12 +148,12 @@ class RecordsCppImpl(RecordsInterface):
         else:
             join_right_keys = join_right_key
 
-        column_names_ = [str(c) for c in self.columns + right_records.columns]
-        columns = Columns(column_names_).as_list()
+        columns = Columns(self.columns + right_records.columns).as_list()
+        column_names = [str(c) for c in columns]
 
         merged_cpp_base = self._records.merge(
             right_records._records, join_left_keys, join_right_keys,
-            columns, how,
+            column_names, how,
             Progress.records_label(progress_label))
 
         merged = RecordsCppImpl()
@@ -280,6 +280,7 @@ class RecordsCppImpl(RecordsInterface):
         progress_label = progress_label or ''
         assert isinstance(right_records, RecordsCppImpl)
         columns = Columns(self.columns + right_records.columns).as_list()
+        column_names = [str(_) for _ in columns]
         join_left_key = join_left_key or []
         join_right_key = join_right_key or []
         join_left_keys = [join_left_key] if isinstance(join_left_key, str) else join_left_key

@@ -14,25 +14,35 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from functools import cached_property, lru_cache
 from logging import getLogger
-from typing import Callable, Dict, List, Optional, Sequence, Union
-
-from caret_analyze.infra.lttng.value_objects.timer_control import TimerInit
-from caret_analyze.value_objects.timer import TimerValue
+from typing import Callable, DefaultDict, Dict, List, Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
 
 from .ros2_tracing.data_model import Ros2DataModel
-from .value_objects import (CallbackGroupValueLttng, NodeValueLttng,
-                            PublisherValueLttng,
-                            SubscriptionCallbackValueLttng,
-                            TimerCallbackValueLttng,
-                            TimerControl)
+from .value_objects import (
+    CallbackGroupValueLttng,
+    NodeValueLttng,
+    PublisherValueLttng,
+    SubscriptionCallbackValueLttng,
+    TimerCallbackValueLttng,
+    TimerControl,
+    TimerInit,
+    TransformBroadcasterValueLttng,
+    TransformBufferValueLttng
+)
 from ...common import Util
 from ...exceptions import InvalidArgumentError
-from ...value_objects import ExecutorValue, NodeValue, Qos
+from ...value_objects import (
+    ExecutorValue,
+    NodeValue,
+    Qos,
+    TimerValue,
+    TransformValue
+)
 
 logger = getLogger(__name__)
 
@@ -131,6 +141,15 @@ class LttngInfo:
 
         return timer_cbs
 
+    def get_tf_frames(self) -> Sequence[TransformValue]:
+        nodes = self.get_nodes()
+        tfs: List[TransformValue] = []
+        for node in nodes:
+            bf = self.get_tf_broadcaster(node)
+            if bf is not None:
+                tfs += bf.transforms
+        return tfs
+
     def get_timer_callbacks(self, node: NodeValue) -> Sequence[TimerCallbackValueLttng]:
         """
         Get timer callbacks information.
@@ -157,8 +176,7 @@ class LttngInfo:
                 for node
                 in self._get_nodes(node.node_name)
             ])
-
-        node_lttng = NodeValueLttng(node.node_name, node.node_id)
+        node_lttng = self._get_node_lttng(node)
         return get_timer_cb_local(node_lttng)
 
     @lru_cache
@@ -181,10 +199,11 @@ class LttngInfo:
         for _, row in nodes_df.iterrows():
             node_name = row['node_name']
             node_id = row['node_id']
+            node_handle = row['node_handle']
             if node_name in added_nodes:
                 duplicate_nodes.add(node_name)
             added_nodes.add(node_name)
-            nodes.append(NodeValueLttng(node_name, node_id))
+            nodes.append(NodeValueLttng(node_name, node_handle, node_id))
 
         for duplicate_node in duplicate_nodes:
             logger.warning(
@@ -192,6 +211,89 @@ class LttngInfo:
                 'The measurement results may be incorrect.')
 
         return nodes
+
+    def get_tf_buffer(
+        self,
+        node: NodeValue
+    ) -> Optional[TransformBufferValueLttng]:
+        nodes = self.get_nodes()
+
+        for tf_buffer_core, group in self._formatted.tf_buffers_df.groupby('tf_buffer_core'):
+            transforms = []
+            tf_map = self.get_tf_buffer_frame_compact_map(tf_buffer_core)
+            for _, row in group.iterrows():
+                frame_id = tf_map[row['frame_id_compact']]
+                child_frame_id = tf_map[row['child_frame_id_compact']]
+                transforms.append(TransformValue(frame_id, child_frame_id))
+
+            row = group.iloc[0, :]
+
+            listener_node = next(filter(lambda x: x.node_id == row['listener_node_id'], nodes))
+            lookup_node = next(filter(lambda x: x.node_id == row['lookup_node_id'], nodes))
+            if lookup_node.node_name != node.node_name:
+                continue
+
+            return TransformBufferValueLttng(
+                    listener_node_id=listener_node.node_id,
+                    listener_node_name=listener_node.node_name,
+                    lookup_node_id=lookup_node.node_id,
+                    lookup_node_name=lookup_node.node_name,
+                    lookup_transforms=tuple(transforms),
+                    buffer_handler=tf_buffer_core
+                )
+        return None
+
+    def _get_node_lttng(self, node: NodeValue) -> NodeValueLttng:
+        nodes = self.get_nodes()
+        return Util.find_one(lambda x: x.node_name == node.node_name, nodes)
+
+    def get_tf_broadcaster(
+        self,
+        node: NodeValue
+    ) -> Optional[TransformBroadcasterValueLttng]:
+        node_lttng = self._get_node_lttng(node)
+        pubs = self._get_tf_publishers_without_cb_bind(node_lttng.node_id)
+
+        br_df = self._formatted.tf_broadcasters_df
+        br_df = br_df[br_df['node_handle'] == node_lttng.node_handle]
+        if len(br_df) == 0:
+            return None
+
+        pub_id = br_df['publisher_id'].values[0]
+        transforms = tuple(
+            TransformValue(tf['frame_id'], tf['child_frame_id'])
+            for _, tf
+            in br_df.iterrows()
+        )
+        br_pub = Util.find_one(lambda x: x.publisher_id == pub_id, pubs)
+        transform_broadcaster = br_df['transform_broadcaster'].values[0]
+        cb_ids = ()
+        return TransformBroadcasterValueLttng(br_pub, transforms, cb_ids, transform_broadcaster)
+
+    def get_tf_broadcaster_frame_compact_map(self, broadcaster: int) -> Dict[int, str]:
+        maps = self._broadcaster_frame_comact_maps
+        assert broadcaster in maps
+        return maps[broadcaster]
+
+    @cached_property
+    def _broadcaster_frame_comact_maps(self) -> Dict[int, Dict[int, str]]:
+        m: DefaultDict = defaultdict(dict)
+        for _, row in self._formatted.tf_broadcaster_frame_id_df.iterrows():
+            broadcater_map = m[row['tf_broadcaster']]
+            broadcater_map[row['frame_id_compact']] = row['frame_id']
+        return m
+
+    def get_tf_buffer_frame_compact_map(self, buffer_core: int) -> Dict[int, str]:
+        maps = self._buffer_frame_compact_maps
+        return maps[buffer_core]
+
+    @cached_property
+    def _buffer_frame_compact_maps(self) -> Dict[int, Dict[int, str]]:
+        m: DefaultDict = defaultdict(dict)
+        for _, row in self._formatted.tf_buffer_frame_id_df.iterrows():
+            buffer_map = m[row['tf_buffer_core']]
+            buffer_map[row['frame_id_compact']] = row['frame_id']
+        return m
 
     def _load_sub_cbs_without_pub(
         self
@@ -280,14 +382,14 @@ class LttngInfo:
                 self._sub_cb_cache[node_id] = self._get_subscription_callback_values(node)
             return self._sub_cb_cache[node_id]
 
-        if node.node_id is None:
+        if not isinstance(node, NodeValueLttng):
             return Util.flatten([
                 get_sub_cb_local(node)
                 for node
                 in self._get_nodes(node.node_name)
             ])
 
-        node_lttng = NodeValueLttng(node.node_name, node.node_id)
+        node_lttng = self._get_node_lttng(node)
         return get_sub_cb_local(node_lttng)
 
     @property
@@ -346,14 +448,14 @@ class LttngInfo:
 
             return self._pub_cache[node_id]
 
-        if node.node_id is None:
+        if not isinstance(node, NodeValueLttng):
             return Util.flatten([
                 get_publishers_local(node)
                 for node
                 in self._get_nodes(node.node_name)
             ])
 
-        node_lttng = NodeValueLttng(node.node_name, node.node_id)
+        node_lttng = self._get_node_lttng(node)
         return get_publishers_local(node_lttng)
 
     def _get_nodes(
@@ -397,6 +499,51 @@ class LttngInfo:
                     node_id=row['node_id'],
                     callback_ids=None,
                     publisher_handle=row['publisher_handle'],
+                    publisher_id=row['publisher_id'],
+                    tilde_publisher=tilde_publisher
+                )
+            )
+
+        return pubs_info
+
+    def _get_tf_publishers_without_cb_bind(self, node_id: str) -> List[PublisherValueLttng]:
+        """
+        Get publishers information.
+
+        Parameters
+        ----------
+        node_name : str
+            target node name.
+
+        Returns
+        -------
+        List[PublisherInfo]
+
+        """
+        pub_df = self._formatted.publishers_df
+        pub_df = merge(pub_df, self._formatted.nodes_df, 'node_handle')
+        tilde_pub = self._formatted.tilde_publishers_df
+
+        pub_df = pd.merge(pub_df, tilde_pub, on=['node_name', 'topic_name'], how='left')
+        pub_df = pub_df.astype({'tilde_publisher': 'Int64'})
+        pubs_info = []
+        for _, row in pub_df.iterrows():
+            if row['node_id'] != node_id:
+                continue
+            if row['topic_name'] not in ['/tf', '/tf_static']:
+                continue
+            tilde_publisher = row['tilde_publisher']
+            if tilde_publisher is pd.NA:
+                tilde_publisher = None
+
+            pubs_info.append(
+                PublisherValueLttng(
+                    node_name=row['node_name'],
+                    topic_name=row['topic_name'],
+                    node_id=row['node_id'],
+                    callback_ids=None,
+                    publisher_handle=row['publisher_handle'],
+                    publisher_id=row['publisher_id'],
                     tilde_publisher=tilde_publisher
                 )
             )
@@ -485,7 +632,7 @@ class LttngInfo:
                 in self._get_nodes(node.node_name)
             ])
 
-        node_lttng = NodeValueLttng(node.node_name, node.node_id)
+        node_lttng = self._get_node_lttng(node)
         return get_cbg_local(node_lttng)
 
     def get_executors(self) -> List[ExecutorValue]:
@@ -502,13 +649,15 @@ class LttngInfo:
         exec_df = merge(exec_df, cbg_df, 'executor_addr')
         execs = []
 
-        for _, group in exec_df.groupby('executor_addr'):
+        for i, (_, group) in enumerate(exec_df.groupby('executor_addr')):
             row = group.iloc[0, :]
             executor_type_name = row['executor_type_name']
 
             cbg_ids = group['callback_group_id'].values
+            executor_id = f'executor_{i}'
             execs.append(
                 ExecutorValue(
+                    executor_id,
                     executor_type_name,
                     tuple(cbg_ids))
             )
@@ -878,6 +1027,16 @@ class DataFrameFormatted:
         self._tilde_pub = self._build_tilde_publisher_df(data)
         self._tilde_sub_id_to_sub = self._build_tilde_sub_id_df(data, self._tilde_sub)
         self._timer_control = self._build_timer_control_df(data)
+        self._tf_broadcasters = self._build_tf_broadcasters_df(data, self._pub_df)
+        self._tf_buffers = self._build_tf_buffers_df(
+            data,
+            self._nodes_df,
+            self._timer_callbacks_df,
+            self._sub_callbacks_df,
+            self._srv_callbacks_df,
+        )
+        self._broadcaster_frame_id_df = data.broadcaster_frame_id_compact.reset_index()
+        self._buffer_frame_id_df = data.buffer_frame_id_compact.reset_index()
 
     @staticmethod
     def _ensure_columns(
@@ -983,6 +1142,18 @@ class DataFrameFormatted:
         return self._pub_df
 
     @property
+    def tf_broadcasters_df(self) -> pd.DataFrame:
+        return self._tf_broadcasters
+
+    @property
+    def tf_broadcaster_frame_id_df(self) -> pd.DataFrame:
+        return self._broadcaster_frame_id_df
+
+    @property
+    def tf_buffer_frame_id_df(self) -> pd.DataFrame:
+        return self._buffer_frame_id_df
+
+    @property
     def services_df(self) -> pd.DataFrame:
         """
         Get service info table.
@@ -1068,11 +1239,105 @@ class DataFrameFormatted:
     def timer_controls_df(self) -> pd.DataFrame:
         return self._timer_control
 
+    @property
+    def tf_buffers_df(self):
+        return self._tf_buffers
+
+    @staticmethod
+    def _build_tf_buffers_df(
+        data: Ros2DataModel,
+        node_df: pd.DataFrame,
+        timer_df: pd.DataFrame,
+        sub_df: pd.DataFrame,
+        srv_df: pd.DataFrame
+    ) -> pd.DataFrame:
+        columns = [
+            'tf_buffer',
+            'tf_buffer_core',
+            'callback',
+            'clock',
+            'listener_node_id',
+            'lookup_node_id',
+            'frame_id_compact',
+            'child_frame_id_compact',
+        ]
+        try:
+            df = data.construct_tf_buffer.reset_index().convert_dtypes()
+            df = pd.merge(
+                df,
+                data.init_bind_tf_buffer_core.reset_index(),
+                left_on='tf_buffer_core',
+                right_on='tf_buffer_core'
+            )
+
+            lookup_df = data.tf_buffer_lookup_transforms.reset_index().convert_dtypes()
+            df = pd.merge(
+                df,
+                lookup_df,
+                on='tf_buffer_core',
+            )
+
+            cb_columns = ['callback_object', 'node_handle']
+            cb_df = pd.concat(
+                [
+                    timer_df[cb_columns],
+                    sub_df[cb_columns],
+                    srv_df[cb_columns]
+                ]
+            )
+            df = pd.merge(
+                df, cb_df,
+                left_on='callback',
+                right_on='callback_object',
+                how='left'
+            )
+
+            df = pd.merge(
+                df,
+                node_df,
+                on='node_handle',
+                how='left'
+            )
+            df.rename(
+                {'node_id': 'listener_node_id', 'node_handle': 'listener_node_handle'},
+                axis=1, inplace=True
+            )
+
+            df = pd.merge(
+                df,
+                data.construct_node_hook.reset_index(),
+                left_on='clock',
+                right_on='clock',
+                how='left'
+            )
+
+            df = pd.merge(
+                df,
+                node_df,
+                on='node_handle',
+                how='left'
+            )
+
+            df.rename(
+                {'node_id': 'lookup_node_id', 'node_handle': 'lookup_node_handle'},
+                axis=1, inplace=True)
+        except KeyError:
+            pass
+
+        df = DataFrameFormatted._ensure_columns(df, columns)
+        return df[columns]
+
     @staticmethod
     def _build_publisher_df(
         data: Ros2DataModel,
     ) -> pd.DataFrame:
-        columns = ['publisher_id', 'publisher_handle', 'node_handle', 'topic_name', 'depth']
+        columns = [
+            'publisher_id',
+            'publisher_handle',
+            'node_handle',
+            'topic_name',
+            'depth',
+        ]
         df = data.publishers.reset_index()
 
         def to_publisher_id(row: pd.Series):
@@ -1080,6 +1345,37 @@ class DataFrameFormatted:
             return f'publisher_{publisher_handle}'
 
         df = DataFrameFormatted._add_column(df, 'publisher_id', to_publisher_id)
+        df = DataFrameFormatted._ensure_columns(df, columns)
+        return df[columns]
+
+    @staticmethod
+    def _build_tf_broadcasters_df(
+        data: Ros2DataModel,
+        pub_df: pd.DataFrame
+    ) -> pd.DataFrame:
+        columns = [
+            'transform_broadcaster',
+            'publisher_id',
+            'publisher_handle',
+            'node_handle',
+            'topic_name',
+            'depth',
+            'frame_id',
+            'child_frame_id'
+        ]
+        try:
+            df = data.transform_broadcaster.reset_index()
+            tf_frames = data.transform_broadcaster_frames.reset_index()
+            df = pd.merge(
+                df,
+                tf_frames,
+                on='transform_broadcaster',
+                how='outer'
+            )
+
+            df = pd.merge(df, pub_df, on='publisher_handle', how='left')
+        except KeyError:
+            pass
         df = DataFrameFormatted._ensure_columns(df, columns)
         return df[columns]
 

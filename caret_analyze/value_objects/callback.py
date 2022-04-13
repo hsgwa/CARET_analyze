@@ -255,9 +255,11 @@ class CallbackStructValue(Summarizable, metaclass=ABCMeta):
         subscribe_topic_name: Optional[str],
         publish_topic_names: Optional[Tuple[str, ...]],
         callback_name: str,
+        callback_id: str,
     ) -> None:
         self._node_name = node_name
         self._callback_name = callback_name
+        self._callback_id = callback_id
         self._symbol = symbol
         self._subscribe_topic_name = subscribe_topic_name
         self._publish_topic_names = publish_topic_names
@@ -302,6 +304,19 @@ class CallbackStructValue(Summarizable, metaclass=ABCMeta):
         return self._callback_name
 
     @property
+    def callback_id(self) -> str:
+        """
+        Get callback id.
+
+        Returns
+        -------
+        str
+            callback id
+
+        """
+        return self._callback_id
+
+    @property
     @abstractmethod
     def callback_type(self) -> CallbackType:
         """
@@ -343,13 +358,15 @@ class TimerCallbackStructValue(CallbackStructValue, ValueObject):
         period_ns: int,
         publish_topic_names: Optional[Tuple[str, ...]],
         callback_name: str,
+        callback_id: str,
     ) -> None:
         super().__init__(
-            node_name,
-            symbol,
-            None,
-            publish_topic_names,
-            callback_name)
+            node_name=node_name,
+            symbol=symbol,
+            subscribe_topic_name=None,
+            publish_topic_names=publish_topic_names,
+            callback_name=callback_name,
+            callback_id=callback_id)
         self._period_ns = period_ns
 
     @property
@@ -379,9 +396,15 @@ class SubscriptionCallbackStructValue(CallbackStructValue, ValueObject):
         subscribe_topic_name: str,
         publish_topic_names: Optional[Tuple[str, ...]],
         callback_name: str,
+        callback_id: str,
     ) -> None:
-        super().__init__(node_name, symbol, subscribe_topic_name,
-                         publish_topic_names, callback_name)
+        super().__init__(
+            node_name=node_name,
+            symbol=symbol,
+            subscribe_topic_name=subscribe_topic_name,
+            publish_topic_names=publish_topic_names,
+            callback_name=callback_name,
+            callback_id=callback_id)
 
     @property
     def callback_type(self) -> CallbackType:

@@ -59,7 +59,7 @@ class ColumnMerger():
         records: RecordsInterface,
     ) -> List[str]:
         renamed_columns: List[str] = []
-        for column in records.columns:
+        for column in records.column_names:
             renamed_columns.append(
                 self.append_column(records, column)
             )
@@ -70,7 +70,7 @@ class ColumnMerger():
         records: RecordsInterface,
     ) -> Dict[str, str]:
         renamed_columns: List[str] = self.append_columns(records)
-        return self._to_rename_rule(records.columns, renamed_columns)
+        return self._to_rename_rule(records.column_names, renamed_columns)
 
     @property
     def column_names(
@@ -152,7 +152,7 @@ class RecordsMerged:
             left_stamp_key = left_records.columns[-1]
             right_stamp_key = right_records.columns[0]
 
-            right_records.drop_columns([left_records.columns[0]])
+            right_records.drop_columns([left_records.column_names[0]])
             right_stamp_key = right_records.columns[0]
 
             logger.info(

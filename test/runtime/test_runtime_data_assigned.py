@@ -130,7 +130,7 @@ class TestNodesLoaded:
         assert nodes == [node_mock]
 
     def test_to_runtime_optional_none(self, mocker: MockerFixture):
-        node_info_mock = mocker.Mock(spec=NodeStructValue)
+        node_info_mock = mocker.Mock(spec=Node)
         mocker.patch.object(node_info_mock, 'node_name', 'node')
         mocker.patch.object(node_info_mock, 'callback_groups', None)
         mocker.patch.object(node_info_mock, 'paths', ())
@@ -157,7 +157,7 @@ class TestNodesLoaded:
         assert node.paths == []
 
     def test_to_runtime_full(self, mocker: MockerFixture):
-        node_info_mock = mocker.Mock(spec=NodeStructValue)
+        node_info_mock = mocker.Mock(spec=Node)
 
         cbg_info_mock = mocker.Mock(spec=CallbackGroupStructValue)
         var_pass_info_mock = mocker.Mock(spec=VariablePassingStructValue)

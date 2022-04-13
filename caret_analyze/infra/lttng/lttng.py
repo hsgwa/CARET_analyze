@@ -18,8 +18,6 @@ from abc import ABCMeta, abstractmethod
 
 from typing import Dict, List, Optional, Sequence, Tuple, Union
 
-from caret_analyze.value_objects.timer import TimerValue
-
 import pandas as pd
 
 from tracetools_analysis.loading import load_file
@@ -27,14 +25,25 @@ from tracetools_analysis.loading import load_file
 from .events_factory import EventsFactory
 from .ros2_tracing.data_model import DataModel
 from .ros2_tracing.processor import Ros2Handler
-from .value_objects import (PublisherValueLttng,
-                            SubscriptionCallbackValueLttng,
-                            TimerCallbackValueLttng)
+from .value_objects import (
+    PublisherValueLttng,
+    SubscriptionCallbackValueLttng,
+    TimerCallbackValueLttng,
+    TransformBroadcasterValueLttng,
+    TransformBufferValueLttng,
+)
 from ..infra_base import InfraBase
 from ...common import ClockConverter
 from ...exceptions import InvalidArgumentError
-from ...record import RecordsInterface
-from ...value_objects import CallbackGroupValue, ExecutorValue, NodeValue, NodeValueWithId, Qos
+from ...record import ColumnMapper, RecordsInterface
+from ...value_objects import (
+    CallbackGroupValue,
+    ExecutorValue,
+    NodeValue,
+    Qos,
+    TimerValue,
+    TransformValue,
+)
 
 Event = Dict[str, int]
 
@@ -186,9 +195,22 @@ class Lttng(InfraBase):
         self._source: RecordsSource = RecordsSource(data, self._info)
         self._counter = EventCounter(data)
         self.events = events if store_events else None
+        self.tf_frame_id_mapper = self._init_tf_column_mapper()
 
     def clear_singleton_cache(self) -> None:
         self._last_load_dir = None
+
+    def _init_tf_column_mapper(
+        self,
+    ) -> ColumnMapper:
+        frame_id_mapper = ColumnMapper()
+
+        frames = self.get_tf_frames()
+        frame_names = sorted({f.frame_id for f in frames} | {f.child_frame_id for f in frames})
+        for i, frame_name in enumerate(frame_names):
+            frame_id_mapper.add(i, frame_name)
+
+        return frame_id_mapper
 
     @staticmethod
     def _parse_lttng_data(
@@ -230,13 +252,13 @@ class Lttng(InfraBase):
 
     def get_nodes(
         self
-    ) -> Sequence[NodeValueWithId]:
+    ) -> Sequence[NodeValue]:
         """
         Get nodes.
 
         Returns
         -------
-        Sequence[NodeValueWithId]
+        Sequence[NodeValue]
             nodes info.
 
         """
@@ -301,6 +323,12 @@ class Lttng(InfraBase):
 
         """
         return self._info.get_publishers(node)
+
+    def get_tf_broadcaster(
+        self,
+        node: NodeValue
+    ) -> Optional[TransformBroadcasterValueLttng]:
+        return self._info.get_tf_broadcaster(node)
 
     def get_timers(
         self,
@@ -413,6 +441,17 @@ class Lttng(InfraBase):
         groupby = groupby or ['trace_point']
         return self._counter.get_count(groupby)
 
+    def get_tf_buffer(
+        self,
+        node: NodeValue
+    ) -> Optional[TransformBufferValueLttng]:
+        return self._info.get_tf_buffer(node)
+
+    def get_tf_frames(
+        self
+    ) -> Sequence[TransformValue]:
+        return self._info.get_tf_frames()
+
     def compose_inter_proc_comm_records(
         self,
     ) -> RecordsInterface:
@@ -495,3 +534,23 @@ class Lttng(InfraBase):
         self,
     ) -> RecordsInterface:
         return self._source.tilde_subscribe_records.clone()
+
+    def compose_send_transform(
+        self,
+    ) -> RecordsInterface:
+        return self._source.send_transform_records(self.tf_frame_id_mapper).clone()
+
+    def compose_lookup_transform(
+        self,
+    ) -> RecordsInterface:
+        return self._source.lookup_transform_records(self.tf_frame_id_mapper).clone()
+
+    def compose_set_transform(
+        self,
+    ) -> RecordsInterface:
+        return self._source.set_transform_records(self.tf_frame_id_mapper).clone()
+
+    def compose_find_closest(
+        self,
+    ) -> RecordsInterface:
+        return self._source.find_closest_records(self.tf_frame_id_mapper).clone()

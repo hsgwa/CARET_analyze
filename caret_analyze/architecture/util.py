@@ -16,7 +16,7 @@ from logging import getLogger, INFO, StreamHandler
 from typing import Tuple
 
 from .architecture import Architecture
-from .architecture_loaded import NodeValuesLoaded
+from .architecture_loaded import NodesStruct
 from .architecture_reader_factory import ArchitectureReaderFactory
 from ..value_objects import NodePathStructValue
 
@@ -37,7 +37,7 @@ def check_procedure(
     reader = ArchitectureReaderFactory.create_instance(file_type, file_path)
     node = app_arch.get_node(node_name)
 
-    paths = NodeValuesLoaded._search_node_paths(node, reader)
+    paths = tuple(NodesStruct._search_node_paths(node, reader))
 
     root_logger.removeHandler(handler)
     return paths

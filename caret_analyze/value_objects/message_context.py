@@ -18,16 +18,21 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from logging import getLogger
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Union
 
 from .callback import CallbackStructValue
 from .publisher import PublisherStructValue
 from .subscription import SubscriptionStructValue
+from .transform import TransformFrameBroadcasterStructValue, TransformFrameBufferStructValue
 from .value_object import ValueObject
 from ..common import Summarizable, Summary
 from ..exceptions import UnsupportedTypeError
 
 logger = getLogger(__name__)
+
+
+NodeInType = Union[TransformFrameBufferStructValue, SubscriptionStructValue]
+NodeOutType = Union[TransformFrameBroadcasterStructValue, PublisherStructValue]
 
 
 class MessageContextType(ValueObject):
@@ -64,16 +69,15 @@ class MessageContext(ValueObject, Summarizable):
     def __init__(
         self,
         node_name: str,
-        message_context_dict: Dict,
-        subscription: Optional[SubscriptionStructValue],
-        publisher: Optional[PublisherStructValue],
+        node_in: Optional[NodeInType],
+        node_out: Optional[NodeOutType],
         child: Optional[Tuple[CallbackStructValue, ...]],
     ) -> None:
         # Since it is used as a value object,
         # mutable types such as dict should not be used.
         self._node_name = node_name
-        self._sub = subscription
-        self._pub = publisher
+        self._node_in = node_in
+        self._node_out = node_out
         self._callbacks = child
 
     @property
@@ -102,13 +106,37 @@ class MessageContext(ValueObject, Summarizable):
             'publisher_topic_name': self.publisher_topic_name
         }
 
-    def is_applicable_path(
-        self,
-        subscription: Optional[SubscriptionStructValue],
-        publisher: Optional[PublisherStructValue],
-        callbacks: Optional[Tuple[CallbackStructValue, ...]]
-    ) -> bool:
-        return self._sub == subscription and self._pub == publisher
+    # def is_applicable_path(
+    #     self,
+    #     subscription: Optional[SubscriptionStructValue],
+    #     publisher: Optional[PublisherStructValue],
+    #     callbacks: Optional[Tuple[CallbackStructValue, ...]]
+    # ) -> bool:
+    #     return self._sub == subscription and self._pub == publisher
+
+    @property
+    def tf_frame_broadcaster(
+        self
+    ) -> Optional[TransformFrameBroadcasterStructValue]:
+        if self.node_out is None:
+            return None
+        if not isinstance(self.node_out, TransformFrameBroadcasterStructValue):
+            raise UnsupportedTypeError(
+                f'{self.node_out} is not a TransformFrameBroadcasterStructValue'
+            )
+        return self.node_out
+
+    @property
+    def tf_frame_bufer(
+        self
+    ) -> Optional[TransformFrameBufferStructValue]:
+        if self.node_in is None:
+            return None
+        if not isinstance(self.node_in, TransformFrameBufferStructValue):
+            raise UnsupportedTypeError(
+                f'{self.node_in} is not a TransformFrameBufferStructValue'
+            )
+        return self.node_in
 
     @property
     def publisher_topic_name(self) -> Optional[str]:
@@ -124,11 +152,12 @@ class MessageContext(ValueObject, Summarizable):
 
     @property
     def summary(self) -> Summary:
-        return Summary({
-            'subscription_topic_name': self.subscription_topic_name,
-            'publisher_topic_name': self.publisher_topic_name,
-            'type': str(self.type_name)
-        })
+        raise NotImplementedError('')
+        # return Summary({
+        #     'subscription_topic_name': self.subscription_topic_name,
+        #     'publisher_topic_name': self.publisher_topic_name,
+        #     'type': str(self.type_name)
+        # })
 
     @abstractmethod
     def verify(self) -> bool:
@@ -139,18 +168,21 @@ class MessageContext(ValueObject, Summarizable):
         context_type_name: str,
         context_dict: Dict,
         node_name: str,
-        subscription: Optional[SubscriptionStructValue],
-        publisher: Optional[PublisherStructValue],
+        node_in: Optional[NodeInType],
+        node_out: Optional[NodeOutType],
         child: Optional[Tuple[CallbackStructValue, ...]]
     ) -> MessageContext:
         if context_type_name == str(MessageContextType.CALLBACK_CHAIN):
-            return CallbackChain(node_name, context_dict, subscription, publisher, child)
+            assert isinstance(node_in, SubscriptionStructValue)
+            assert isinstance(node_out, PublisherStructValue)
+            return CallbackChain(node_name, context_dict, node_in, node_out, child)
         if context_type_name == str(MessageContextType.INHERIT_UNIQUE_STAMP):
-            return InheritUniqueStamp(node_name, context_dict, subscription, publisher, child)
+            assert False, 'deprecated'
+            # return InheritUniqueStamp(node_name, context_dict, subscription, publisher, child)
         if context_type_name == str(MessageContextType.USE_LATEST_MESSAGE):
-            return UseLatestMessage(node_name, context_dict, subscription, publisher, child)
+            return UseLatestMessage(node_name, node_in, node_out, child)
         if context_type_name == str(MessageContextType.TILDE):
-            return Tilde(node_name, context_dict, subscription, publisher, child)
+            return Tilde(node_name, context_dict, node_in, node_out, child)
 
         raise UnsupportedTypeError(
             f'Failed to load message context. message_context={context_type_name}')
@@ -256,11 +288,11 @@ class Tilde(MessageContext):
         self,
         node_name: str,
         message_context_dict: Dict,
-        subscription: Optional[SubscriptionStructValue],
-        publisher: Optional[PublisherStructValue],
+        node_in: Optional[NodeInType],
+        node_out: Optional[NodeOutType],
         callbacks: Optional[Tuple[CallbackStructValue, ...]]
     ) -> None:
-        super().__init__(node_name, message_context_dict, subscription, publisher, callbacks)
+        super().__init__(node_name, message_context_dict, node_in, node_out, callbacks)
 
     @property
     def context_type(self) -> MessageContextType:

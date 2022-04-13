@@ -15,6 +15,8 @@
 
 """Module for ROS 2 data model."""
 
+from typing import Set, Tuple
+
 from caret_analyze.record.column import Column
 from caret_analyze.record.record_factory import RecordFactory, RecordsFactory
 
@@ -56,10 +58,19 @@ class Ros2DataModel(DataModel):
         self._callback_group_service: DataModelIntermediateStorage = []
         self._callback_group_client: DataModelIntermediateStorage = []
         self._rmw_impl: DataModelIntermediateStorage = []
+        self._symbol_rename: DataModelIntermediateStorage = []
 
         self._tilde_subscriptions: DataModelIntermediateStorage = []
         self._tilde_publishers: DataModelIntermediateStorage = []
         self._tilde_subscribe_added: DataModelIntermediateStorage = []
+        self._transform_broadcaster: DataModelIntermediateStorage = []
+        self._transform_broadcaster_frames: DataModelIntermediateStorage = []
+        self._construct_tf_buffer: DataModelIntermediateStorage = []
+        self._init_bind_tf_buffer_core: DataModelIntermediateStorage = []
+        self._tf_buffer_lookup_transforms: Set[Tuple[int, int, int]] = set()
+        self._construct_node_hook: DataModelIntermediateStorage = []
+        self._broadcaster_frame_id_compact: DataModelIntermediateStorage = []
+        self._buffer_frame_id_compact: DataModelIntermediateStorage = []
 
         # Events (multiple instances, may not have a meaningful index)
         # string argument
@@ -182,8 +193,8 @@ class Ros2DataModel(DataModel):
             [
                 Column('tilde_publish_timestamp'),
                 Column('publisher'),
-                Column('subscription_id'),
-                Column('tilde_message_id')
+                Column('message_info_id'),
+                Column('message_id')
             ]
         )
         self.sim_time = RecordsFactory.create_instance(
@@ -214,7 +225,7 @@ class Ros2DataModel(DataModel):
             [
                 Column('lookup_transform_start_timestamp'),
                 Column('tf_buffer_core'),
-                Column('target_time'),
+                Column('tf_lookup_target_time'),
                 Column('frame_id_compact'),
                 Column('child_frame_id_compact'),
             ]
@@ -234,9 +245,6 @@ class Ros2DataModel(DataModel):
                 Column('frame_id_compact'),
                 Column('child_frame_id_compact'),
                 Column('stamp'),
-                Column('frame_id_compact_'),
-                Column('child_frame_id_compact_'),
-                Column('stamp_')
             ]
         )
         self.tf_set_transform = RecordsFactory.create_instance(
@@ -245,7 +253,7 @@ class Ros2DataModel(DataModel):
                 Column('tid'),
                 Column('set_transform_timestamp'),
                 Column('tf_buffer_core'),
-                Column('transform_stamp'),
+                Column('tf_timestamp'),
                 Column('frame_id_compact'),
                 Column('child_frame_id_compact'),
             ]
@@ -410,20 +418,33 @@ class Ros2DataModel(DataModel):
         self._tilde_publishers.append(record)
 
     def add_callback_start_instance(
-        self, timestamp: int, callback: int, is_intra_process: bool
+        self, timestamp: int,
+        tid: int,
+        callback: int,
+        is_intra_process: bool
     ) -> None:
         record = RecordFactory.create_instance(
             {
                 'callback_start_timestamp': timestamp,
+                'tid': tid,
                 'callback_object': callback,
                 'is_intra_process': is_intra_process,
             }
         )
         self.callback_start_instances.append(record)
 
-    def add_callback_end_instance(self, timestamp: int, callback: int) -> None:
+    def add_callback_end_instance(
+        self,
+        timestamp: int,
+        tid: int,
+        callback: int
+    ) -> None:
         record = RecordFactory.create_instance(
-            {'callback_end_timestamp': timestamp, 'callback_object': callback}
+            {
+                'callback_end_timestamp': timestamp,
+                'tid': tid,
+                'callback_object': callback
+            }
         )
         self.callback_end_instances.append(record)
 
@@ -579,6 +600,123 @@ class Ros2DataModel(DataModel):
     def add_rmw_implementation(self, rmw_impl: str):
         self._rmw_impl.append({'rmw_impl': rmw_impl})
 
+    def add_symbol_rename(self, timestamp: int, symbol_from: str, symbol_to: str):
+        self._symbol_rename.append(
+            {
+                'timestamp': timestamp,
+                'symbol_from': symbol_from,
+                'symbol_to': symbol_to
+            }
+        )
+
+    def add_transform_broadcaster(
+        self,
+        timestamp: int,
+        broadcaster: int,
+        publisher_handle: int,
+    ) -> None:
+        self._transform_broadcaster.append(
+            {
+                'timestamp': timestamp,
+                'transform_broadcaster': broadcaster,
+                'publisher_handle': publisher_handle
+            }
+        )
+
+    def add_transform_broadcaster_frames(
+        self,
+        timestamp: int,
+        transform_broadcaster: int,
+        frame_id: str,
+        child_frame_id: str
+    ) -> None:
+        self._transform_broadcaster_frames.append(
+            {
+                'timestamp': timestamp,
+                'transform_broadcaster': transform_broadcaster,
+                'frame_id': frame_id,
+                'child_frame_id': child_frame_id
+            }
+        )
+
+    def add_construct_tf_buffer(
+        self,
+        tid: int,
+        timestamp: int,
+        tf_buffer: int,
+        tf_buffer_core: int,
+        clock: int
+    ) -> None:
+        self._construct_tf_buffer.append(
+            {
+                'tid': tid,
+                'timestamp': timestamp,
+                'tf_buffer': tf_buffer,
+                'tf_buffer_core': tf_buffer_core,
+                'clock': clock
+            }
+        )
+
+    def add_init_bind_tf_buffer_core(
+        self,
+        timestamp: int,
+        tf_buffer_core: int,
+        callback: int
+    ) -> None:
+        self._init_bind_tf_buffer_core.append(
+            {
+                'timestamp': timestamp,
+                'tf_buffer_core': tf_buffer_core,
+                'callback': callback
+            }
+        )
+
+    def add_construct_node_hook(
+        self,
+        timestamp: int,
+        node_handle: int,
+        clock: int
+    ) -> None:
+        self._construct_node_hook.append(
+            {
+                'timestamp': timestamp,
+                'node_handle': node_handle,
+                'clock': clock
+            }
+        )
+
+    def add_broadcaster_frame_id_compact(
+        self,
+        timestamp: int,
+        broadcaster: int,
+        frame_id: str,
+        frame_id_compact: int
+    ) -> None:
+        self._broadcaster_frame_id_compact.append(
+            {
+                'timestamp': timestamp,
+                'tf_broadcaster': broadcaster,
+                'frame_id': frame_id,
+                'frame_id_compact': frame_id_compact,
+            }
+        )
+
+    def add_buffer_frame_id_compact(
+        self,
+        timestamp: int,
+        buffer_core: int,
+        frame_id: str,
+        frame_id_compact: int
+    ) -> None:
+        self._buffer_frame_id_compact.append(
+            {
+                'timestamp': timestamp,
+                'tf_buffer_core': buffer_core,
+                'frame_id': frame_id,
+                'frame_id_compact': frame_id_compact,
+            }
+        )
+
     def add_dispatch_intra_process_subscription_callback_instance(
         self,
         timestamp: int,
@@ -616,18 +754,127 @@ class Ros2DataModel(DataModel):
         self,
         timestamp: int,
         publisher: int,
-        subscription_id: int,
-        tilde_message_id: int,
+        message_info_id: int,
+        message_id: int,
     ) -> None:
         record = RecordFactory.create_instance(
             {
                 'tilde_publish_timestamp': timestamp,
                 'publisher': publisher,
-                'subscription_id': subscription_id,
-                'tilde_message_id': tilde_message_id,
+                'message_info_id': message_info_id,
+                'message_id': message_id,
             }
         )
         self.tilde_publish.append(record)
+
+    def add_send_transform(
+        self,
+        timestamp: int,
+        broadcaster: int,
+        tf_stamp: int,
+        frame_id_compact: int,
+        child_frame_id_compact: int,
+    ) -> None:
+        record = RecordFactory.create_instance(
+            {
+                'send_transform_timestamp': timestamp,
+                'broadcaster': broadcaster,
+                'tf_timestamp': tf_stamp,
+                'frame_id_compact': frame_id_compact,
+                'child_frame_id_compact': child_frame_id_compact,
+            }
+        )
+        self.send_transform.append(record)
+
+    def add_tf_lookup_transform_start(
+        self,
+        timestamp: int,
+        buffer_core: int,
+        target_time: int,
+        frame_id_compact: int,
+        child_frame_id_compact: int,
+    ) -> None:
+        record = RecordFactory.create_instance(
+            {
+                'lookup_transform_start_timestamp': timestamp,
+                'tf_buffer_core': buffer_core,
+                'tf_lookup_target_time': target_time,
+                'frame_id_compact': frame_id_compact,
+                'child_frame_id_compact': child_frame_id_compact,
+            }
+        )
+
+        self._tf_buffer_lookup_transforms.add(
+            (buffer_core, frame_id_compact, child_frame_id_compact)
+        )
+        self.tf_lookup_transform_start.append(record)
+
+    def add_tf_lookup_transform_end(
+        self,
+        timestamp: int,
+        buffer_core: int,
+    ) -> None:
+        record = RecordFactory.create_instance(
+            {
+                'lookup_transform_end_timestamp': timestamp,
+                'tf_buffer_core': buffer_core,
+            }
+        )
+        self.tf_lookup_transform_end.append(record)
+
+    def add_tf_find_closest(
+        self,
+        timestamp: int,
+        buffer_core: int,
+        frame_id_compact: int,
+        child_frame_id_compact: int,
+        stamp: int,
+        frame_id_compact_: int,
+        child_frame_id_compact_: int,
+        stamp_: int
+    ) -> None:
+        record = RecordFactory.create_instance(
+            {
+                'find_closest_timestamp': timestamp,
+                'tf_buffer_core': buffer_core,
+                'frame_id_compact': frame_id_compact,
+                'child_frame_id_compact': child_frame_id_compact,
+                'stamp': stamp,
+            }
+        )
+        self.tf_find_closest.append(record)
+        if frame_id_compact_ != 0 and frame_id_compact_ != 0:
+            record = RecordFactory.create_instance(
+                {
+                    'find_closest_timestamp': timestamp,
+                    'tf_buffer_core': buffer_core,
+                    'frame_id_compact': frame_id_compact_,
+                    'child_frame_id_compact': child_frame_id_compact_,
+                    'stamp': stamp_,
+                }
+            )
+            self.tf_find_closest.append(record)
+
+    def add_tf_set_transform(
+        self,
+        timestamp: int,
+        tid: int,
+        buffer_core: int,
+        stamp: int,
+        frame_id_compact: int,
+        child_frame_id_compact: int,
+    ) -> None:
+        record = RecordFactory.create_instance(
+            {
+                'tid': tid,
+                'set_transform_timestamp': timestamp,
+                'tf_buffer_core': buffer_core,
+                'tf_timestamp': stamp,
+                'frame_id_compact': frame_id_compact,
+                'child_frame_id_compact': child_frame_id_compact,
+            }
+        )
+        self.tf_set_transform.append(record)
 
     def add_executor(
         self,
@@ -776,6 +1023,68 @@ class Ros2DataModel(DataModel):
         if self._callback_objects:
             self.callback_objects.set_index(
                 'reference', inplace=True, drop=True)
+        self.construct_tf_buffer = pd.DataFrame.from_dict(self._construct_tf_buffer)
+        if self._construct_tf_buffer:
+            self.construct_tf_buffer.set_index(
+                'tf_buffer', inplace=True, drop=True
+            )
+        self.init_bind_tf_buffer_core = pd.DataFrame.from_dict(
+            self._init_bind_tf_buffer_core)
+        if self._init_bind_tf_buffer_core:
+            self.init_bind_tf_buffer_core.set_index(
+                'tf_buffer_core', inplace=True, drop=True
+            )
+
+        tf_buffer_lookup_transforms_dict = [
+                {'tf_buffer_core': t[0], 'frame_id_compact': t[1], 'child_frame_id_compact': t[2]}
+                for t
+                in self._tf_buffer_lookup_transforms
+            ]
+        self.tf_buffer_lookup_transforms = pd.DataFrame.from_dict(
+            tf_buffer_lookup_transforms_dict
+        )
+        if len(self._tf_buffer_lookup_transforms) > 0:
+            self.tf_buffer_lookup_transforms.set_index(
+                'tf_buffer_core', inplace=True, drop=True
+            )
+
+        self.construct_node_hook = pd.DataFrame.from_dict(self._construct_node_hook)
+        if self._construct_node_hook:
+            self.construct_node_hook.set_index(
+                'node_handle', inplace=True, drop=True
+            )
+        self.broadcaster_frame_id_compact = pd.DataFrame.from_dict(
+            self._broadcaster_frame_id_compact)
+        if self._broadcaster_frame_id_compact:
+            self.broadcaster_frame_id_compact.set_index(
+                'tf_broadcaster', inplace=True, drop=True
+            )
+        self.buffer_frame_id_compact = pd.DataFrame.from_dict(
+            self._buffer_frame_id_compact)
+        if self._buffer_frame_id_compact:
+            self.buffer_frame_id_compact.set_index(
+                'tf_buffer_core', inplace=True, drop=True
+            )
+        self.symbol_rename = pd.DataFrame.from_dict(self._symbol_rename)
+        symbol_map = {
+            symbol['symbol_from']: symbol['symbol_to'] for symbol in self._symbol_rename
+        }
+        for callback_symbol in self._callback_symbols:
+            while callback_symbol['symbol'] in symbol_map:
+                callback_symbol['symbol'] = symbol_map[callback_symbol['symbol']]
+
+        self.transform_broadcaster = pd.DataFrame.from_dict(self._transform_broadcaster)
+        if self._transform_broadcaster:
+            self.transform_broadcaster.set_index(
+                'transform_broadcaster', inplace=True, drop=True
+            )
+        self.transform_broadcaster_frames = pd.DataFrame.from_dict(
+            self._transform_broadcaster_frames)
+        if self._transform_broadcaster_frames:
+            self.transform_broadcaster_frames.set_index(
+                'transform_broadcaster', inplace=True, drop=True
+            )
+
         self.callback_symbols = pd.DataFrame.from_dict(self._callback_symbols)
         if self._callback_symbols:
             self.callback_symbols.set_index(

@@ -24,7 +24,7 @@ class TimerValue(ValueObject):
 
     def __init__(
         self,
-        period: str,
+        period: int,
         node_name: str,
         node_id: Optional[str],
         callback_id: Optional[str],
@@ -39,11 +39,15 @@ class TimerValue(ValueObject):
         return self._node_name
 
     @property
+    def callback_id(self) -> str:
+        return self._callback_id
+
+    @property
     def node_id(self) -> Optional[str]:
         return self._node_id
 
     @property
-    def period(self) -> str:
+    def period(self) -> int:
         return self._period
 
     @property
@@ -58,11 +62,11 @@ class TimerStructValue(ValueObject, Summarizable):
         self,
         node_name: str,
         period_ns: int,
-        callback_info: Optional[TimerCallbackStructValue],
+        callback: Optional[TimerCallbackStructValue],
     ) -> None:
         self._node_name: str = node_name
         self._period_ns: int = period_ns
-        self._callback_value = callback_info
+        self._callback_value = callback
 
     @property
     def node_name(self) -> str:

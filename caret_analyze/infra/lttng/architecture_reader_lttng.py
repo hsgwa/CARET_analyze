@@ -12,41 +12,50 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, List, Sequence
+from typing import Dict, List, Optional, Sequence
 
-from caret_analyze.value_objects.node import NodeValueWithId
-
+from . import Lttng
+from .value_objects import (
+    PublisherValueLttng,
+    TimerCallbackValueLttng,
+    TransformBroadcasterValueLttng,
+    TransformBufferValueLttng
+)
 from ...architecture.reader_interface import ArchitectureReader
-from ...value_objects import (CallbackGroupValue, ExecutorValue, NodeValue,
-                              PathValue, PublisherValue,
-                              SubscriptionCallbackValue, SubscriptionValue,
-                              TimerCallbackValue, TimerValue, VariablePassingValue)
+from ...value_objects import (CallbackGroupValue,
+                              ExecutorValue,
+                              NodeValue,
+                              PathValue,
+                              SubscriptionCallbackValue,
+                              SubscriptionValue,
+                              TimerValue,
+                              TransformValue,
+                              VariablePassingValue)
 
 
 class ArchitectureReaderLttng(ArchitectureReader):
     def __init__(
         self,
-        trace_dir: str
+        lttng: Lttng
     ) -> None:
-        from .lttng import Lttng
-        self._lttng = Lttng(trace_dir)
+        self._lttng = lttng
 
-    def get_nodes(self) -> Sequence[NodeValueWithId]:
+    def get_nodes(self) -> Sequence[NodeValue]:
         return self._lttng.get_nodes()
 
-    def get_timer_callbacks(
+    def _get_timer_callbacks(
         self,
         node: NodeValue
-    ) -> Sequence[TimerCallbackValue]:
+    ) -> Sequence[TimerCallbackValueLttng]:
         return self._lttng.get_timer_callbacks(node)
 
-    def get_variable_passings(
+    def _get_variable_passings(
         self,
         node: NodeValue
     ) -> Sequence[VariablePassingValue]:
         return []
 
-    def get_message_contexts(
+    def _get_message_contexts(
         self,
         node: NodeValue
     ) -> Sequence[Dict]:
@@ -57,25 +66,25 @@ class ArchitectureReaderLttng(ArchitectureReader):
     ) -> Sequence[ExecutorValue]:
         return self._lttng.get_executors()
 
-    def get_subscription_callbacks(
+    def _get_subscription_callbacks(
         self,
         node: NodeValue
     ) -> Sequence[SubscriptionCallbackValue]:
         return self._lttng.get_subscription_callbacks(node)
 
-    def get_publishers(
+    def _get_publishers(
         self,
         node: NodeValue
-    ) -> Sequence[PublisherValue]:
+    ) -> Sequence[PublisherValueLttng]:
         return self._lttng.get_publishers(node)
 
-    def get_timers(
+    def _get_timers(
         self,
         node: NodeValue
     ) -> Sequence[TimerValue]:
         return self._lttng.get_timers(node)
 
-    def get_callback_groups(
+    def _get_callback_groups(
         self,
         node: NodeValue
     ) -> Sequence[CallbackGroupValue]:
@@ -86,12 +95,17 @@ class ArchitectureReaderLttng(ArchitectureReader):
     ) -> Sequence[PathValue]:
         return []
 
-    def get_subscriptions(
+    def get_tf_frames(
+        self
+    ) -> Sequence[TransformValue]:
+        return self._lttng.get_tf_frames()
+
+    def _get_subscriptions(
         self,
         node: NodeValue
     ) -> Sequence[SubscriptionValue]:
         info: List[SubscriptionValue] = []
-        for sub_cb in self.get_subscription_callbacks(node):
+        for sub_cb in self._get_subscription_callbacks(node):
             topic_name = sub_cb.subscribe_topic_name
             assert topic_name is not None
             info.append(SubscriptionValue(
@@ -101,3 +115,15 @@ class ArchitectureReaderLttng(ArchitectureReader):
                 sub_cb.callback_id
             ))
         return info
+
+    def _get_tf_broadcaster(
+        self,
+        node: NodeValue
+    ) -> Optional[TransformBroadcasterValueLttng]:
+        return self._lttng.get_tf_broadcaster(node)
+
+    def _get_tf_buffer(
+        self,
+        node: NodeValue
+    ) -> Optional[TransformBufferValueLttng]:
+        return self._lttng.get_tf_buffer(node)

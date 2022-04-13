@@ -74,7 +74,7 @@ class PathBase(metaclass=ABCMeta):
             column names
 
         """
-        return deepcopy(self.__records.columns)
+        return deepcopy(self.__records.column_names)
 
     def to_dataframe(
         self,

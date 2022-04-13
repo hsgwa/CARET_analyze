@@ -22,7 +22,7 @@ from .value_object import ValueObject
 from ..common import Summarizable, Summary, Util
 
 
-class CommunicationStructValue(ValueObject, Summarizable):
+class CommunicationStructValueBase(ValueObject, Summarizable):
 
     def __init__(
         self,
@@ -106,3 +106,24 @@ class CommunicationStructValue(ValueObject, Summarizable):
             'publish_node': self.publish_node_name,
             'subscirbe_node': self.subscribe_node_name,
         })
+
+
+class CommunicationStructValue(CommunicationStructValueBase):
+
+    def __init__(
+        self,
+        node_publish: NodeStructValue,
+        node_subscription: NodeStructValue,
+        publisher_value: PublisherStructValue,
+        subscription_value: SubscriptionStructValue,
+        publish_callback_values: Optional[Tuple[CallbackStructValue, ...]],
+        subscription_callback_value: Optional[CallbackStructValue],
+    ) -> None:
+        super().__init__(
+            node_publish,
+            node_subscription,
+            publisher_value,
+            subscription_value,
+            publish_callback_values,
+            subscription_callback_value
+        )
