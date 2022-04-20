@@ -1,15 +1,22 @@
 from __future__ import annotations
 
 from logging import getLogger
-from typing import List, Optional, Iterable, Iterator, Tuple
+from typing import List, Iterable, Iterator, Tuple, Union
 
 from .node import NodesStruct
-from .node_path import NodePathStruct
 from .communication import CommunicationsStruct
 from ..reader_interface import ArchitectureReader
 from ...exceptions import Error
+from ...value_objects import (
+    CommunicationStructValue,
+    NodePathStructValue,
+    PathValue,
+    TransformCommunicationStructValue,
+    PathStructValue,
+)
 
 logger = getLogger(__name__)
+
 
 class PathsStruct(Iterable):
 
@@ -22,22 +29,17 @@ class PathsStruct(Iterable):
         paths: List[PathStruct] = []
         for path_value in reader.get_paths():
             try:
-                path = PathStruct(path_value, nodes_loaded, communications_loaded)
+                path = PathStruct(path_value, nodes_loaded,
+                                  communications_loaded)
                 paths.append(path)
             except Error as e:
-                logger.warning(f'Failed to load path. path_name={path.path_name}. {e}')
+                logger.warning(
+                    f'Failed to load path. path_name={path.path_name}. {e}')
 
         self._data = paths
 
     def __iter__(self) -> Iterator[PathStruct]:
         return iter(self._data)
-
-    @staticmethod
-    def _to_node_path_struct(
-        node_path_values: Tuple[NodePathValue, ...],
-        nodes_loaded: NodesStruct,
-    ) -> Tuple[NodePathStructValue, ...]:
-        return tuple(nodes_loaded.find_node_path(_) for _ in node_path_values)
 
     def to_value(self) -> Tuple[PathStructValue, ...]:
         return tuple(_.to_value() for _ in self._data)
@@ -49,7 +51,7 @@ class PathsStruct(Iterable):
     #     callbacks: List[CallbackStructInfo]
     # ) -> List[CallbackStructInfo]:
     #     for publisher in publishers:
-    #         if publisher.callback_name in [None, UNDEFINED_STR]:
+    #         if publisher.callback_name in [None]:
     #             continue
 
     #         callback = Util.find_one(
@@ -79,32 +81,40 @@ class PathsStruct(Iterable):
     #     raise ItemNotFoundError(
     #         f'Failed to find callback. node_name: {node_name}, callback_name: {callback_name}')
 
+
+ChildType = Union[
+    NodePathStructValue,
+    CommunicationStructValue,
+    TransformCommunicationStructValue
+]
+
+
 class PathStruct():
+
     def __init__(
         self,
         path_info: PathValue,
-        nodes_loaded: NodesStruct,
-        comms_loaded: CommunicationsStruct,
+        nodes: NodesStruct,
+        comms: CommunicationsStruct,
     ) -> None:
-        node_paths_info = PathsStruct._to_node_path_struct(
-            path_info.node_path_values, nodes_loaded)
+        self._val = path_info
+        self._child: List[ChildType] = []
 
-        child: List[Union[NodePathStructValue, CommunicationStructValue]] = []
-        child.append(node_paths_info[0])
-        for pub_node_path, sub_node_path in zip(node_paths_info[:-1], node_paths_info[1:]):
-            topic_name = sub_node_path.subscribe_topic_name
-            if topic_name is None:
-                msg = 'topic name is None. '
-                msg += f'publish_node: {pub_node_path.node_name}, '
-                msg += f'subscribe_node: {sub_node_path.node_name}, '
-                raise InvalidArgumentError(msg)
-            comm_info = comms_loaded.find_communication(
-                topic_name,
-                pub_node_path.node_name,
-                sub_node_path.node_name
-            )
+        node_paths = path_info.node_path_values
 
-            child.append(comm_info)
-            child.append(sub_node_path)
-        # return PathStructValue(path_info.path_name, tuple(child))
+        self._child.append(nodes.get_node_path(node_paths[0]))
+        for pub_node_path, sub_node_path in zip(node_paths[:-1], node_paths[1:]):
+            self._child.append(comms.get(pub_node_path, sub_node_path))
+            self._child.append(nodes.get_node_path(sub_node_path))
 
+    def to_value(self) -> PathStructValue:
+        child = [_.to_value() for _ in self._child]
+        return PathStructValue(self.path_name, tuple(child))
+
+    @property
+    def child(self) -> List[ChildType]:
+        return self._child
+
+    @property
+    def path_name(self) -> str:
+        return self._val.path_name

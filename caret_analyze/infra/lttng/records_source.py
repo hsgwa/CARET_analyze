@@ -24,7 +24,7 @@ from .lttng_info import LttngInfo
 from .ros2_tracing.data_model import Ros2DataModel
 from .value_objects import TimerCallbackValueLttng, TimerControl, TimerInit
 from ...common import Util
-from ...record import (Column, merge, merge_sequencial,
+from ...record import (Column, ColumnAttribute, merge, merge_sequencial,
                        merge_sequencial_for_addr_track,
                        RecordFactory,
                        RecordsFactory,
@@ -152,7 +152,9 @@ class RecordsSource():
                 rclcpp_publish.append(
                     record.data[COLUMN_NAME.RCLCPP_INTER_PUBLISH_TIMESTAMP])
 
-        publish.append_column(Column(COLUMN_NAME.RCLCPP_PUBLISH_TIMESTAMP), rclcpp_publish)
+        publish.append_column(
+            Column(COLUMN_NAME.RCLCPP_PUBLISH_TIMESTAMP, [ColumnAttribute.SYSTEM_TIME]),
+            rclcpp_publish)
         publish.drop_columns([
             COLUMN_NAME.RCLCPP_INTRA_PUBLISH_TIMESTAMP,
             COLUMN_NAME.RCLCPP_INTER_PUBLISH_TIMESTAMP
@@ -304,7 +306,10 @@ class RecordsSource():
             inter_intra_publish = min(rclcpp_publish, rclcpp_intra_publish)
             publish_stamps.append(inter_intra_publish)
 
-        publish.append_column(Column(COLUMN_NAME.RCLCPP_PUBLISH_TIMESTAMP), publish_stamps)
+        publish.append_column(
+            Column(COLUMN_NAME.RCLCPP_PUBLISH_TIMESTAMP,
+                   [ColumnAttribute.SYSTEM_TIME]),
+            publish_stamps)
 
         columns = []
         columns.append(COLUMN_NAME.PUBLISHER_HANDLE)

@@ -148,6 +148,12 @@ class RecordsCppImpl(RecordsInterface):
         else:
             join_right_keys = join_right_key
 
+        if not (set(join_left_keys) <= set(self.column_names)):
+            raise InvalidArgumentError('Failed to find column')
+
+        if not set(join_right_keys) <= set(right_records.column_names):
+            raise InvalidArgumentError('Failed to find column')
+
         columns = Columns(self.columns + right_records.columns).as_list()
         column_names = [str(c) for c in columns]
 
@@ -280,11 +286,18 @@ class RecordsCppImpl(RecordsInterface):
         progress_label = progress_label or ''
         assert isinstance(right_records, RecordsCppImpl)
         columns = Columns(self.columns + right_records.columns).as_list()
-        column_names = [str(_) for _ in columns]
         join_left_key = join_left_key or []
         join_right_key = join_right_key or []
         join_left_keys = [join_left_key] if isinstance(join_left_key, str) else join_left_key
         join_right_keys = [join_right_key] if isinstance(join_right_key, str) else join_right_key
+
+        if not set(join_left_keys) <= set(self.column_names) or \
+                left_stamp_key not in self.column_names:
+            raise InvalidArgumentError('Failed to find columns')
+        if not set(join_right_keys) <= set(right_records.column_names) or \
+                right_stamp_key not in right_records.column_names:
+            raise InvalidArgumentError('Failed to find columns')
+
         merged_cpp_base = self._records.merge_sequencial(
             right_records._records,
             left_stamp_key,
@@ -317,6 +330,16 @@ class RecordsCppImpl(RecordsInterface):
     ) -> RecordsInterface:
         assert isinstance(copy_records, RecordsCppImpl)
         assert isinstance(sink_records, RecordsCppImpl)
+
+        source_columns = {source_stamp_key, source_key}
+        copy_columns = {copy_stamp_key, copy_from_key, copy_to_key}
+        sink_columns = {sink_stamp_key, sink_from_key}
+        if not source_columns <= set(self.column_names):
+            raise InvalidArgumentError('Failed to find columns')
+        if not copy_columns <= set(copy_records.column_names):
+            raise InvalidArgumentError('Failed to find columns')
+        if not sink_columns <= set(sink_records.column_names):
+            raise InvalidArgumentError('Failed to find columns')
 
         progress_label = progress_label or ''
         merged_cpp_base = self._records.merge_sequencial_for_addr_track(

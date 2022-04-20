@@ -39,10 +39,6 @@ class TimerValue(ValueObject):
         return self._node_name
 
     @property
-    def callback_id(self) -> str:
-        return self._callback_id
-
-    @property
     def node_id(self) -> Optional[str]:
         return self._node_id
 

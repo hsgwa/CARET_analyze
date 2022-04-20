@@ -12,25 +12,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, List, Optional, Sequence
+from itertools import product
+from typing import Dict, List, Optional, Sequence, Union
 
 from . import Lttng
 from .value_objects import (
     PublisherValueLttng,
     TimerCallbackValueLttng,
     TransformBroadcasterValueLttng,
-    TransformBufferValueLttng
+    TransformBufferValueLttng,
 )
-from ...architecture.reader_interface import ArchitectureReader
+from ...architecture.reader_interface import IGNORE_TOPICS, ArchitectureReader
 from ...value_objects import (CallbackGroupValue,
                               ExecutorValue,
                               NodeValue,
                               PathValue,
+                              PublisherValue,
                               SubscriptionCallbackValue,
                               SubscriptionValue,
                               TimerValue,
                               TransformValue,
-                              VariablePassingValue)
+                              VariablePassingValue,
+                              TransformBufferValue,
+                              TransformBroadcasterValue,
+                              TransformTreeValue,
+                              UseLatestMessage)
 
 
 class ArchitectureReaderLttng(ArchitectureReader):
@@ -59,7 +65,83 @@ class ArchitectureReaderLttng(ArchitectureReader):
         self,
         node: NodeValue
     ) -> Sequence[Dict]:
-        return []
+
+        class TfFrameBroadcasterLocal:
+
+            def __init__(self, transform: TransformValue) -> None:
+                self.transform = transform
+
+        class TfFrameBufferLocal:
+
+            def __init__(
+                self,
+                listen_transform: TransformValue,
+                lookup_transform: TransformValue,
+            ) -> None:
+                self.listen_transform = listen_transform
+                self.lookup_transform = lookup_transform
+
+        NodeOutType = Union[PublisherValue, TfFrameBroadcasterLocal]
+        NodeInType = Union[SubscriptionValue, TfFrameBufferLocal]
+
+        node = self.get_node(node.node_name)
+        node_inputs: List[NodeInType] = []
+        node_outputs: List[NodeOutType] = []
+
+        for pub in self.get_publishers(node.node_name):
+            if pub.topic_name in IGNORE_TOPICS:
+                continue
+            if pub.topic_name == '/tf':
+                continue
+            if pub.topic_name.endswith('/info/pub'):
+                continue
+            node_outputs.append(pub)
+
+        for sub in self.get_subscriptions(node.node_name):
+            if pub.topic_name.endswith('/info/pub'):
+                continue
+            if sub.topic_name in IGNORE_TOPICS:
+                continue
+            node_inputs.append(sub)
+
+        tf_br = self.get_tf_broadcaster(node.node_name)
+        tf_buff = self.get_tf_buffer(node.node_name)
+
+        tf_frames = self.get_tf_frames()
+        tf_tree = TransformTreeValue.create_from_transforms(tf_frames)
+
+        if isinstance(tf_buff, TransformBufferValue) and tf_buff.lookup_transforms is not None:
+            for listen_tf, lookup_tf in product(tf_frames, tf_buff.lookup_transforms):
+                if not tf_tree.is_in(lookup_tf, listen_tf):
+                    continue
+                node_inputs.append(TfFrameBufferLocal(listen_tf, lookup_tf))
+
+        if isinstance(tf_br, TransformBroadcasterValue):
+            for br_tf in tf_br.broadcast_transforms:
+                node_outputs.append(TfFrameBroadcasterLocal(br_tf))
+
+        contexts = []
+        for node_in, node_out in product(node_inputs, node_outputs):
+            context = {'context_type': UseLatestMessage.TYPE_NAME}
+            if isinstance(node_in, SubscriptionValue):
+                context['subscription_topic_name'] = node_in.topic_name
+            elif isinstance(node_in, TfFrameBufferLocal):
+                context['subscription_topic_name'] = '/tf'
+                context['lookup_frame_id'] = node_in.lookup_transform.frame_id
+                context['lookup_child_frame_id'] = node_in.lookup_transform.child_frame_id
+                context['listen_frame_id'] = node_in.listen_transform.frame_id
+                context['listen_child_frame_id'] = node_in.listen_transform.child_frame_id
+
+            if isinstance(node_out, PublisherValue):
+                context['publisher_topic_name'] = node_out.topic_name
+            elif isinstance(node_out, TfFrameBroadcasterLocal):
+                context['publisher_topic_name'] = '/tf'
+                context['broadcast_frame_id'] = node_out.transform.frame_id
+                context['broadcast_child_frame_id'] = node_out.transform.child_frame_id
+
+            contexts.append(context)
+
+        return contexts
 
     def get_executors(
         self

@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .callback_graph import CallbackPathSearch
+from .callback_graph import CallbackPathSearcher
 from .node_graph import NodePathSearcher
 
 __all__ = [
-    'CallbackPathSearch',
+    'CallbackPathSearcher',
     'NodePathSearcher',
 ]

@@ -344,8 +344,8 @@ class Records(RecordsInterface):
             for column in columns:
                 column_name = column.column_name
                 if column_name in df_row:
-                    if column.mapper is not None:
-                        df_dict[column_name][i] = column.mapper.get(
+                    if column.has_mapper():
+                        df_dict[column_name][i] = column.get_mapped(
                             df_row[column_name])
                     else:
                         df_dict[column_name][i] = df_row[column_name]
@@ -396,8 +396,11 @@ class Records(RecordsInterface):
         else:
             join_right_keys = join_right_key
 
-        assert set(join_left_keys) <= set(self.column_names)
-        assert set(join_right_keys) <= set(right_records.column_names)
+        if not (set(join_left_keys) <= set(self.column_names)):
+            raise InvalidArgumentError('Failed to find column')
+
+        if not set(join_right_keys) <= set(right_records.column_names):
+            raise InvalidArgumentError('Failed to find column')
 
         if len(join_left_keys) != len(join_right_keys):
             raise InvalidArgumentError("join keys size doesn\'t match")
@@ -540,6 +543,13 @@ class Records(RecordsInterface):
 
         join_left_keys = [join_left_key] if isinstance(join_left_key, str) else join_left_key
         join_right_keys = [join_right_key] if isinstance(join_right_key, str) else join_right_key
+
+        if not set(join_left_keys) <= set(self.column_names) or \
+                left_stamp_key not in self.column_names:
+            raise InvalidArgumentError('Failed to find columns')
+        if not set(join_right_keys) <= set(right_records.column_names) or \
+                right_stamp_key not in right_records.column_names:
+            raise InvalidArgumentError('Failed to find columns')
 
         del join_left_key
         del join_right_key
@@ -708,6 +718,16 @@ class Records(RecordsInterface):
     ) -> Records:
         assert isinstance(copy_records, Records)
         assert isinstance(sink_records, Records)
+
+        source_columns = {source_stamp_key, source_key}
+        copy_columns = {copy_stamp_key, copy_from_key, copy_to_key}
+        sink_columns = {sink_stamp_key, sink_from_key}
+        if not source_columns <= set(self.column_names):
+            raise InvalidArgumentError('Failed to find columns')
+        if not copy_columns <= set(copy_records.column_names):
+            raise InvalidArgumentError('Failed to find columns')
+        if not sink_columns <= set(sink_records.column_names):
+            raise InvalidArgumentError('Failed to find columns')
 
         columns = self.column_names + copy_records.column_names + sink_records.column_names
         columns = [

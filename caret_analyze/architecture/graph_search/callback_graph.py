@@ -16,7 +16,6 @@ from typing import Optional, List, Union
 from itertools import product
 from logging import getLogger
 
-from ..struct.callback import CallbackStruct
 from .graph_search import Graph, GraphNode, GraphPath
 from ..struct.struct_interface import (
     CallbackStructInterface,
@@ -25,14 +24,10 @@ from ..struct.struct_interface import (
     NodePathStructInterface,
     NodePathsStructInterface,
     NodeStructInterface,
-    PublisherStructInterface,
-    SubscriptionStructInterface,
-    TransformFrameBroadcasterStructInterface,
-    TransformFrameBufferStructInterface,
     VariablePassingStructInterface,
 )
 from ...common import Util
-from ...exceptions import ItemNotFoundError, MultipleItemFoundError
+from ...exceptions import InvalidArgumentError, ItemNotFoundError
 
 logger = getLogger(__name__)
 
@@ -77,8 +72,8 @@ class CallbackPathSearcher:
 
     def search(
         self,
-        start_callback: CallbackStruct,
-        end_callback: CallbackStruct,
+        start_callback: CallbackStructInterface,
+        end_callback: CallbackStructInterface,
     ) -> None:
         start_name = self._to_node_point_name(start_callback.callback_name, 'read')
         end_name = self._to_node_point_name(end_callback.callback_name, 'write')
@@ -86,14 +81,19 @@ class CallbackPathSearcher:
         graph_paths = self._graph.search_paths(GraphNode(start_name), GraphNode(end_name))
 
         for graph_path in graph_paths:
-            in_value = start_callback.node_input
+            in_values = start_callback.node_inputs
             out_values = end_callback.node_outputs or []
 
-            if out_values is None or out_values == ():
-                self._to_path(graph_path, in_value, None)
+            if (out_values is None or out_values == ()) and in_values is not None:
+                for in_value in in_values:
+                    self._to_path(graph_path, in_value, None)
 
             for out_value in out_values:
-                self._to_path(graph_path, in_value, out_value)
+                if in_values is None:
+                    self._to_path(graph_path, None, out_value)
+                else:
+                    for in_value in in_values:
+                        self._to_path(graph_path, in_value, out_value)
 
     def _to_path(
         self,
@@ -110,56 +110,55 @@ class CallbackPathSearcher:
             cb_or_varpass = self._find_cb_or_varpass(graph_node_from, graph_node_to)
             child.append(cb_or_varpass)
 
-        node_in: Union[None, SubscriptionStructInterface, TransformFrameBufferStructInterface]
-        node_in = None
-        node_out: Union[None, PublisherStructInterface, TransformFrameBroadcasterStructInterface]
-        node_out = None
+        # node_in: Union[None, SubscriptionStructInterface, TransformFrameBufferStructInterface]
+        # node_in = None
+        # node_out: Union[None, PublisherStructInterface, TransformFrameBroadcasterStructInterface]
+        # node_out = None
 
-        if node_in_value is not None:
-            try:
-                node_in = self._node.get_node_in(node_in_value)
-            except ItemNotFoundError:
-                msg = 'Failed to find subscription. '
-                msg += f'node_name: {self._node.node_name}, '
-                msg += f'topic_name: {node_in_value}'
-                logger.warning(msg)
-            except MultipleItemFoundError:
-                msg = 'Failed to identify subscription. Several candidates were found. '
-                msg += f'node_name: {self._node.node_name}, '
-                msg += f'topic_name: {node_in_value}'
-                logger.warning(msg)
+        # if node_in_value is not None:
+        #     try:
+        #         node_in = self._node.get_node_input(node_in_value)
+        #     except ItemNotFoundError:
+        #         msg = 'Failed to find subscription. '
+        #         msg += f'node_name: {self._node.node_name}, '
+        #         msg += f'topic_name: {node_in_value}'
+        #         logger.warning(msg)
+        #     except MultipleItemFoundError:
+        #         msg = 'Failed to identify subscription. Several candidates were found. '
+        #         msg += f'node_name: {self._node.node_name}, '
+        #         msg += f'topic_name: {node_in_value}'
+        #         logger.warning(msg)
 
-        if node_out_value is not None:
-            try:
-                node_out = self._node.get_node_out(node_out_value)
-            except ItemNotFoundError:
-                msg = 'Failed to find publisher. '
-                msg += f'node_name: {self._node.node_name}'
-                msg += f'topic_name: {node_out_value}'
-                logger.warning(msg)
-            except MultipleItemFoundError:
-                msg = 'Failed to identify publisher. Several candidates were found. '
-                msg += f'node_name: {self._node.node_name}, '
-                msg += f'topic_name: {node_out_value}'
-                logger.warning(msg)
+        # if node_out_value is not None:
+        #     try:
+        #         node_out = self._node.get_node_output(node_out_value)
+        #     except ItemNotFoundError:
+        #         msg = 'Failed to find publisher. '
+        #         msg += f'node_name: {self._node.node_name}'
+        #         msg += f'topic_name: {node_out_value}'
+        #         logger.warning(msg)
+        #     except MultipleItemFoundError:
+        #         msg = 'Failed to identify publisher. Several candidates were found. '
+        #         msg += f'node_name: {self._node.node_name}, '
+        #         msg += f'topic_name: {node_out_value}'
+        #         logger.warning(msg)
 
-        tf_buffer: Optional[TransformFrameBufferStructInterface] = None
-        tf_broadcaster: Optional[TransformFrameBroadcasterStructInterface] = None
+        # tf_buffer: Optional[TransformFrameBufferStructInterface] = None
+        # tf_broadcaster: Optional[TransformFrameBroadcasterStructInterface] = None
 
-        node_path = self._paths.get(node_in, node_out)
-        node_path.node_name = self._node.node_name
+        node_path = self._paths.get(self._node.node_name, node_in_value, node_out_value)
 
-        if isinstance(node_in, SubscriptionStruct):
-            node_path.subscription = node_in
-        elif isinstance(node_in, TransformFrameBufferStruct):
-            node_path.tf_buffer = node_in
+        # if isinstance(node_in_value, SubscriptionStruct):
+        #     node_path.subscription = node_in_value
+        # elif isinstance(node_in_value, TransformFrameBufferStruct):
+        #     node_path.tf_buffer = node_in_value
 
-        if isinstance(node_out, PublisherStruct):
-            node_path.publisher = node_out
-        elif isinstance(node_out, TransformFrameBroadcasterStruct):
-            node_path.tf_broadcaster = tf_broadcaster
+        # if isinstance(node_out_value, PublisherStruct):
+        #     node_path.publisher = node_out_value
+        # elif isinstance(node_out_value, TransformFrameBroadcasterStruct):
+        #     node_path.tf_broadcaster = tf_broadcaster
 
-        node_path.child = child
+        # node_path.child = child
 
         return node_path
 

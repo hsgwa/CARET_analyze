@@ -23,10 +23,7 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
-    Union,
 )
-
-from caret_analyze.value_objects.transform import TransformTreeValue
 
 
 from .callback import CallbacksStruct
@@ -38,25 +35,25 @@ from .struct_interface import (
     NodeOutputType,
     NodeStructInterface,
     NodeStructsInterface,
-    PublisherStructInterface,
+    PublishersStructInterface,
+    SubscriptionsStructInterface,
+    VariablePassingsStructInterface,
 )
-from .subscription import SubscriptionsStruct, SubscriptionStruct
+from .subscription import SubscriptionsStruct
 from .timer import TimersStruct, TimerStruct
 from .transform import (
     TransformBroadcasterStruct,
     TransformBufferStruct,
     TransformFrameBroadcastersStruct,
-    TransformFrameBroadcasterStruct,
     TransformFrameBuffersStruct,
-    TransformFrameBufferStruct,
 )
 from .variable_passing import VariablePassingsStruct
-from ..reader_interface import ArchitectureReader
-from ...common import Progress, Util
-from ...exceptions import Error, ItemNotFoundError
+from ...common import Util
+from ...exceptions import ItemNotFoundError
 from ...value_objects import (
     NodeStructValue,
-    NodeValue
+    NodePathValue,
+    NodePathStructValue,
 )
 
 
@@ -114,8 +111,8 @@ class NodeStruct(NodeStructInterface):
 
     @property
     def node_outputs(self) -> Sequence[NodeOutputType]:
-        outputs: List[NodeOutputType]
-        outputs = self.publishers.as_list()
+        outputs: List[NodeOutputType] = []
+        outputs += self.publishers.as_list()
         outputs = Util.filter_items(lambda x: x.topic_name != '/tf', outputs)
         outputs = Util.filter_items(
             lambda x: not x.topic_name.endswith('/info/pub'), outputs)
@@ -170,7 +167,7 @@ class NodeStruct(NodeStructInterface):
         self._node_id = node_id
 
     @property
-    def subscriptions(self) -> SubscriptionsStruct:
+    def subscriptions(self) -> SubscriptionsStructInterface:
         assert self._subscriptions is not None
         return self._subscriptions
 
@@ -179,7 +176,7 @@ class NodeStruct(NodeStructInterface):
         self._subscriptions = subscriptions
 
     @property
-    def publishers(self) -> PublishersStruct:
+    def publishers(self) -> PublishersStructInterface:
         assert self._publishers is not None
         return self._publishers
 
@@ -195,6 +192,13 @@ class NodeStruct(NodeStructInterface):
     @node_paths.setter
     def node_paths(self, node_paths: NodePathsStruct):
         self._node_paths = node_paths
+
+    def get_node_path(
+        self,
+        node_path: NodePathValue
+    ) -> NodePathStructValue:
+        assert self._node_paths is not None
+        return self._node_paths._get_node_path(node_path)
 
     @property
     def timers(self) -> TimersStruct:
@@ -222,7 +226,7 @@ class NodeStruct(NodeStructInterface):
         return cbs
 
     @property
-    def variable_passings(self) -> Optional[VariablePassingsStruct]:
+    def variable_passings(self) -> Optional[VariablePassingsStructInterface]:
         return self._variable_passings
 
     @variable_passings.setter
@@ -231,7 +235,8 @@ class NodeStruct(NodeStructInterface):
 
     @property
     def node_inputs(self) -> Sequence[NodeInputType]:
-        node_inputs = self.subscriptions.as_list()
+        node_inputs: List[NodeInputType] = []
+        node_inputs += self.subscriptions.as_list()
         if self.tf_buffer is not None:
             node_inputs += self.tf_buffer.frame_buffers.as_list()
         return node_inputs
@@ -288,41 +293,6 @@ class NodeStruct(NodeStructInterface):
             msg += f'timer_period: {timer_period}'
             raise ItemNotFoundError(msg)
 
-    @staticmethod
-    def create_from_reader(
-        node: NodeValue,
-        reader: ArchitectureReader
-    ) -> NodeStruct:
-        node_struct = NodeStruct(
-            node_id=node.node_name,
-            node_name=node.node_name
-        )
-
-        callbacks = CallbacksStruct.create_from_reader(reader, node)
-        node_struct.publishers = PublishersStruct.create_from_reader(
-            reader, callbacks, node)
-
-        node_struct.subscriptions = SubscriptionsStruct.create_from_reader(
-            reader, callbacks, node)
-        node_struct.subscriptions.to_value()
-
-        node_struct.timers = TimersStruct.create_from_reader(
-            reader, callbacks, node)
-        node_struct.callback_groups = CallbackGroupsStruct.create_from_reader(
-            reader, callbacks, node)
-        node_struct.variable_passings = VariablePassingsStruct.create_from_reader(
-            reader, callbacks, node)
-        transforms = reader.get_tf_frames()
-        tf_tree = TransformTreeValue.create_from_transforms(transforms)
-        node_struct.tf_buffer = TransformBufferStruct.create_from_reader(
-            reader, tf_tree, node)
-        node_struct.tf_broadcaster = TransformBroadcasterStruct.create_from_reader(
-            reader, tf_tree, callbacks, node)
-        node_struct.node_paths = NodePathsStruct.create_from_reader(
-            reader, node_struct)
-
-        return node_struct
-
 
 class NodesStruct(NodeStructsInterface, Iterable):
 
@@ -359,110 +329,9 @@ class NodesStruct(NodeStructsInterface, Iterable):
     def __iter__(self) -> Iterator[NodeStruct]:
         return iter(self._data.values())
 
-    @staticmethod
-    def create_from_reader(
-        reader: ArchitectureReader,
-    ) -> NodesStruct:
-        nodes = NodesStruct()
-
-        node_values = reader.get_nodes()
-        for node in Progress.tqdm(node_values, 'Loading nodes.'):
-            # try:
-            node = NodeStruct.create_from_reader(node, reader)
-            nodes.insert(node)
-            # except Error as e:
-            #     logger.warn(f'Failed to load node. node_name = {node.node_name}, {e}')
-
-        return nodes
-
-    # def find_node_path(
-    #     self,
-    #     node_path_value: NodePathValue,
-    # ) -> NodePathStructValue:
-    #     def is_target(value: NodePathStructValue):
-    #         return value.publish_topic_name == node_path_value.publish_topic_name and \
-    #             value.subscribe_topic_name == node_path_value.subscribe_topic_name
-
-    #     node_value = self.find_node(node_path_value.node_name)
-    #     try:
-    #         return Util.find_one(is_target, node_value.paths)
-    #     except ItemNotFoundError:
-    #         msg = 'Failed to find node path value. '
-    #         msg += f' node_name: {node_path_value.node_name}'
-    #         msg += f' publish_topic_name: {node_path_value.publish_topic_name}'
-    #         msg += f' subscribe_topic_name: {node_path_value.subscribe_topic_name}'
-    #         raise ItemNotFoundError(msg)
-    #     except MultipleItemFoundError as e:
-    #         raise MultipleItemFoundError(
-    #             f'{e}'
-    #             f' node_name: {node_path_value.node_name}'
-    #             f' publish_topic_name: {node_path_value.publish_topic_name}'
-    #             f' subscribe_topic_name: {node_path_value.subscribe_topic_name}'
-    #         )
-
-    # def find_callback_group(
-    #     self,
-    #     callback_group_id: str
-    # ) -> CallbackGroupStruct:
-    #     for cbg_loaded in self._cbgs:
-    #         try:
-    #             return cbg_loaded.find_callback_group(callback_group_id)
-    #         except ItemNotFoundError:
-    #             pass
-
-    #     msg = f'Failed to find callback group. callback_group_id={callback_group_id}'
-    #     raise ItemNotFoundError(msg)
-
-    # def find_callback(
-    #     self,
-    #     callback_id: str
-    # ) -> CallbackStruct:
-    #     for cb_loaded in self._cbs:
-    #         try:
-    #             return cb_loaded.find_callback(callback_id)
-    #         except ItemNotFoundError:
-    #             pass
-    #     raise ItemNotFoundError(f'Failed to find callback. callback_id={callback_id}')
-
-    # def find_callbacks(
-    #     self,
-    #     callback_ids: Tuple[str, ...]
-    # ) -> Tuple[CallbackStructValue, ...]:
-    #     callbacks: List[CallbackStructValue] = []
-    #     for cb in self._cbs:
-    #         callbacks += cb.search_callbacks(callback_ids)
-
-    #     if len(callbacks) < len(callback_ids):
-    #         raise ItemNotFoundError(f'Failed to find callback. callback_ids={callback_ids}')
-
-    #     return tuple(callbacks)
-
-    # @staticmethod
-    # def _message_context_assigned(
-    #     node_paths: Sequence[NodePathStructValue],
-    #     message_contexts: Sequence[MessageContext],
-    # ) -> List[NodePathStructValue]:
-    #     node_paths_ = list(node_paths)
-    #     for i, node_path in enumerate(node_paths_):
-    #         for context in message_contexts:
-    #             if node_path.subscription is None or \
-    #                     node_path.publisher is None:
-    #                 continue
-
-    #             if not context.is_applicable_path(
-    #                 node_path.subscription,
-    #                 node_path.publisher,
-    #                 node_path.callbacks
-    #             ):
-    #                 continue
-
-    #             node_paths_[i] = NodePathStructValue(
-    #                 node_name=node_path.node_name,
-    #                 subscription=node_path.subscription,
-    #                 publisher=node_path.publisher,
-    #                 child=node_path.child,
-    #                 message_context=context,
-    #                 tf_broadcaster=None,
-    #                 tf_buffer=None
-    #             )
-    #     return node_paths_
+    def get_node_path(
+        self,
+        node_path: NodePathValue
+    ) -> NodePathStructValue:
+        node = self.get_node(node_path.node_name)
+        return node.get_node_path(node_path)

@@ -15,12 +15,10 @@
 from __future__ import annotations
 
 from typing import Dict, List, Optional, Tuple
-from caret_analyze.value_objects import publisher
 
 from caret_analyze.value_objects.publisher import PublisherStructValue
 from caret_analyze.value_objects.subscription import SubscriptionStructValue
 
-from .reader_interface import UNDEFINED_STR
 from ..exceptions import InvalidArgumentError, UnsupportedTypeError
 from ..value_objects import (
     CallbackStructValue,
@@ -87,13 +85,24 @@ class NamedPathsDicts:
         obj['path_name'] = path_value.path_name
         node_chain = []
         for node_path in path_value.node_paths:
-            node_chain.append(
-                {
+            node_path_dict = {
                     'node_name': node_path.node_name,
-                    'publish_topic_name': node_path.publish_topic_name or UNDEFINED_STR,
-                    'subscribe_topic_name': node_path.subscribe_topic_name or UNDEFINED_STR
+                    'publish_topic_name': node_path.publish_topic_name,
+                    'subscribe_topic_name': node_path.subscribe_topic_name
                 }
-            )
+            tf_br = node_path.tf_frame_broadcaster
+            if tf_br is not None:
+                node_path_dict['broadcast_frame_id'] = tf_br.frame_id
+                node_path_dict['broadcast_child_frame_id'] = tf_br.child_frame_id
+
+            tf_buff = node_path.tf_frame_buffer
+            if tf_buff is not None:
+                node_path_dict['buffer_listen_frame_id'] = tf_buff.listen_frame_id
+                node_path_dict['buffer_listen_child_frame_id'] = tf_buff.listen_child_frame_id
+                node_path_dict['buffer_lookup_frame_id'] = tf_buff.lookup_frame_id
+                node_path_dict['buffer_lookup_child_frame_id'] = tf_buff.lookup_child_frame_id
+
+            node_chain.append(node_path_dict)
         obj['node_chain'] = node_chain
         return obj
 
@@ -175,8 +184,8 @@ class VarPassDicts:
     def _undefined_dict(self) -> Dict:
         return \
             {
-                'callback_id_write': UNDEFINED_STR,
-                'callback_id_read': UNDEFINED_STR,
+                'callback_id_write': None,
+                'callback_id_read': None,
             }
 
     @property
@@ -197,11 +206,12 @@ class PubDicts:
     @staticmethod
     def _to_dict(publisher_value: PublisherStructValue):
 
+        callback_ids: List[Optional[str]]
         if isinstance(publisher_value, PublisherStructValue) \
                 and publisher_value.callback_ids is not None:
             callback_ids = list(publisher_value.callback_ids)
         else:
-            callback_ids = [UNDEFINED_STR]
+            callback_ids = [None]
 
         return {
             'topic_name': publisher_value.topic_name,
@@ -222,7 +232,7 @@ class SubDicts:
     def _to_dict(self, subscription_value: SubscriptionStructValue):
         return {
             'topic_name': subscription_value.topic_name,
-            'callback_id': subscription_value.callback_id or UNDEFINED_STR
+            'callback_id': subscription_value.callback_id
         }
 
     @property
@@ -301,24 +311,11 @@ class MessageContextDicts:
         for path in paths:
             if path.publish_topic_name is None or path.subscribe_topic_name is None:
                 continue
-            message_context = path.message_context
-            if message_context is None:
-                d = {
-                    'context_type': UNDEFINED_STR,
-                }
-                d['subscription_topic_name'] = path.subscribe_topic_name
-                if path.subscribe_topic_name == '/tf':
-                    assert path.tf_frame_buffer is not None
-                    d['lookup_frame_id'] = path.tf_frame_buffer.frame_id
-                    d['lookup_child_frame_id'] = path.tf_frame_buffer.child_frame_id
 
-                d['publisher_topic_name'] = path.publish_topic_name
-                if path.publish_topic_name == '/tf':
-                    assert path.tf_frame_broadcaster is not None
-                    d['broadcast_frame_id'] = path.tf_frame_broadcaster.frame_id
-                    d['broadcast_child_frame_id'] = path.tf_frame_broadcaster.child_frame_id
-                self._data.append(d)
-            else:
+            if path.publish_topic_name == '/tf' and path.tf_frame_broadcaster is None:
+                continue
+            message_context = path.message_context
+            if message_context is not None:
                 self._data.append(message_context.to_dict())
 
     @property
@@ -339,10 +336,10 @@ class TfBroadcasterDicts:
                     'child_frame_id': transform.child_frame_id,
                 }
             )
-        cb_ids = []
+        cb_ids: List[Optional[str]] = []
         if broadcaster.callback_ids is not None:
             cb_ids = [str(cb_id) for cb_id in broadcaster.callback_ids]
-        cb_ids = cb_ids if len(cb_ids) > 0 else [UNDEFINED_STR]
+        cb_ids = cb_ids if len(cb_ids) > 0 else [None]
         self._data = {
             'frames': frames,
             'callback_ids': cb_ids
@@ -363,8 +360,8 @@ class TfBufferDicts:
             for transform in buffer.lookup_transforms:
                 self._data.append(
                     {
-                        'frame_id': transform.frame_id,
-                        'child_frame_id': transform.child_frame_id,
+                        'lookup_frame_id': transform.frame_id,
+                        'lookup_child_frame_id': transform.child_frame_id,
                     }
                 )
 

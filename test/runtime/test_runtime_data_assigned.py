@@ -254,14 +254,14 @@ class TestPublishsersLoaded:
 
         loaded = PublishersLoaded((pub_info_mock,), provider_mock)
 
-        loaded.get_publishers(None, None, None) == [pub_info_mock]
-        assert loaded.get_publishers(
+        loaded.get_publishers_by_cb_name(None, None, None) == [pub_info_mock]
+        assert loaded.get_publishers_by_cb_name(
             'node_name',
             'callback',
             'topic_name'
         ) == [pub_mock]
 
-        assert loaded.get_publishers('not_exist', None, None) == []
+        assert loaded.get_publishers_by_cb_name('not_exist', None, None) == []
 
 
 class TestSubscriptionsLoaded:

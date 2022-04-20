@@ -147,7 +147,7 @@ class LttngInfo:
         for node in nodes:
             bf = self.get_tf_broadcaster(node)
             if bf is not None:
-                tfs += bf.transforms
+                tfs += bf.broadcast_transforms
         return tfs
 
     def get_timer_callbacks(self, node: NodeValue) -> Sequence[TimerCallbackValueLttng]:
@@ -218,6 +218,8 @@ class LttngInfo:
     ) -> Optional[TransformBufferValueLttng]:
         nodes = self.get_nodes()
 
+        listen_transforms = self.get_tf_frames()
+
         for tf_buffer_core, group in self._formatted.tf_buffers_df.groupby('tf_buffer_core'):
             transforms = []
             tf_map = self.get_tf_buffer_frame_compact_map(tf_buffer_core)
@@ -239,6 +241,7 @@ class LttngInfo:
                     lookup_node_id=lookup_node.node_id,
                     lookup_node_name=lookup_node.node_name,
                     lookup_transforms=tuple(transforms),
+                    listen_transforms=tuple(listen_transforms),
                     buffer_handler=tf_buffer_core
                 )
         return None

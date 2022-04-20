@@ -17,7 +17,7 @@
 
 from typing import Set, Tuple
 
-from caret_analyze.record.column import Column
+from caret_analyze.record.column import Column, ColumnAttribute
 from caret_analyze.record.record_factory import RecordFactory, RecordsFactory
 
 import pandas as pd
@@ -81,7 +81,7 @@ class Ros2DataModel(DataModel):
             None,
             [
                 Column('tid'),
-                Column('callback_start_timestamp'),
+                Column('callback_start_timestamp', [ColumnAttribute.SYSTEM_TIME]),
                 Column('callback_object'),
                 Column('is_intra_process')
             ]
@@ -90,21 +90,21 @@ class Ros2DataModel(DataModel):
             None,
             [
                 Column('tid'),
-                Column('callback_end_timestamp'),
+                Column('callback_end_timestamp', [ColumnAttribute.SYSTEM_TIME]),
                 Column('callback_object')
             ]
         )
         self.dds_write_instances = RecordsFactory.create_instance(
             None,
             [
-                Column('dds_write_timestamp'),
+                Column('dds_write_timestamp', [ColumnAttribute.SYSTEM_TIME]),
                 Column('message')
             ]
         )
         self.dds_bind_addr_to_stamp = RecordsFactory.create_instance(
             None,
             [
-                Column('dds_bind_addr_to_stamp_timestamp'),
+                Column('dds_bind_addr_to_stamp_timestamp', [ColumnAttribute.SYSTEM_TIME]),
                 Column('addr'),
                 Column('source_timestamp')
             ]
@@ -120,14 +120,14 @@ class Ros2DataModel(DataModel):
         self.on_data_available_instances = RecordsFactory.create_instance(
             None,
             [
-                Column('on_data_available_timestamp'),
+                Column('on_data_available_timestamp', [ColumnAttribute.SYSTEM_TIME]),
                 Column('source_timestamp')
             ]
         )
         self.rclcpp_intra_publish_instances = RecordsFactory.create_instance(
             None,
             [
-                Column('rclcpp_intra_publish_timestamp'),
+                Column('rclcpp_intra_publish_timestamp', [ColumnAttribute.SYSTEM_TIME]),
                 Column('publisher_handle'),
                 Column('message'),
                 Column('message_timestamp')
@@ -136,7 +136,7 @@ class Ros2DataModel(DataModel):
         self.rclcpp_publish_instances = RecordsFactory.create_instance(
             None,
             [
-                Column('rclcpp_publish_timestamp'),
+                Column('rclcpp_publish_timestamp', [ColumnAttribute.SYSTEM_TIME]),
                 Column('publisher_handle'),
                 Column('message'),
                 Column('message_timestamp')
@@ -145,7 +145,7 @@ class Ros2DataModel(DataModel):
         self.rcl_publish_instances = RecordsFactory.create_instance(
             None,
             [
-                Column('rcl_publish_timestamp'),
+                Column('rcl_publish_timestamp', [ColumnAttribute.SYSTEM_TIME]),
                 Column('publisher_handle'),
                 Column('message')
             ]
@@ -191,7 +191,7 @@ class Ros2DataModel(DataModel):
         self.tilde_publish = RecordsFactory.create_instance(
             None,
             [
-                Column('tilde_publish_timestamp'),
+                Column('tilde_publish_timestamp', [ColumnAttribute.SYSTEM_TIME]),
                 Column('publisher'),
                 Column('message_info_id'),
                 Column('message_id')
@@ -200,20 +200,20 @@ class Ros2DataModel(DataModel):
         self.sim_time = RecordsFactory.create_instance(
             None,
             [
-                Column('system_time'),
+                Column('system_time', [ColumnAttribute.SYSTEM_TIME]),
                 Column('sim_time')
             ]
         )
         self.timer_event = RecordsFactory.create_instance(
             None,
             [
-                Column('time_event_stamp')
+                Column('time_event_stamp', [ColumnAttribute.SYSTEM_TIME])
             ]
         )
         self.send_transform = RecordsFactory.create_instance(
             None,
             [
-                Column('send_transform_timestamp'),
+                Column('send_transform_timestamp', [ColumnAttribute.SYSTEM_TIME]),
                 Column('broadcaster'),
                 Column('tf_timestamp'),
                 Column('frame_id_compact'),
@@ -223,7 +223,7 @@ class Ros2DataModel(DataModel):
         self.tf_lookup_transform_start = RecordsFactory.create_instance(
             None,
             [
-                Column('lookup_transform_start_timestamp'),
+                Column('lookup_transform_start_timestamp', [ColumnAttribute.SYSTEM_TIME]),
                 Column('tf_buffer_core'),
                 Column('tf_lookup_target_time'),
                 Column('frame_id_compact'),
@@ -233,14 +233,14 @@ class Ros2DataModel(DataModel):
         self.tf_lookup_transform_end = RecordsFactory.create_instance(
             None,
             [
-                Column('lookup_transform_end_timestamp'),
+                Column('lookup_transform_end_timestamp', [ColumnAttribute.SYSTEM_TIME]),
                 Column('tf_buffer_core'),
             ]
         )
         self.tf_find_closest = RecordsFactory.create_instance(
             None,
             [
-                Column('find_closest_timestamp'),
+                Column('find_closest_timestamp', [ColumnAttribute.SYSTEM_TIME]),
                 Column('tf_buffer_core'),
                 Column('frame_id_compact'),
                 Column('child_frame_id_compact'),
@@ -251,7 +251,7 @@ class Ros2DataModel(DataModel):
             None,
             [
                 Column('tid'),
-                Column('set_transform_timestamp'),
+                Column('set_transform_timestamp', [ColumnAttribute.SYSTEM_TIME]),
                 Column('tf_buffer_core'),
                 Column('tf_timestamp'),
                 Column('frame_id_compact'),

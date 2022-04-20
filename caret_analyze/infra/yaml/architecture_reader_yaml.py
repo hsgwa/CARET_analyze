@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional, Sequence, Set
 
 import yaml
 
-from ...architecture.reader_interface import ArchitectureReader, UNDEFINED_STR
+from ...architecture.reader_interface import ArchitectureReader
 from ...common import Util
 from ...exceptions import InvalidYamlFormatError
 from ...value_objects import (
@@ -49,15 +49,19 @@ class YamlDict(UserDict):
     def __getitem__(self, key: str) -> Any:
         try:
             v = super().__getitem__(key)
-            if v is None:
-                raise InvalidYamlFormatError(f"'{key}' value is None. obj: {self.data}")
             return v
         except (KeyError, TypeError) as e:
             msg = f'Failed to parse yaml file. {key} not found. obj: {self.data}'
             raise InvalidYamlFormatError(msg) from e
 
     def get_value(self, key: str) -> str:
-        return str(self.__getitem__(key))
+        v = self.__getitem__(key)
+        if isinstance(v, str):
+            return v
+        if isinstance(v, int):
+            return str(v)
+
+        raise InvalidYamlFormatError('Failed to parse yaml file. ')
 
     def get_value_with_default(
         self,
@@ -65,7 +69,9 @@ class YamlDict(UserDict):
         default: Optional[str]
     ) -> Optional[str]:
         if key in self.data:
-            return self.get_value(key)
+            v = self.__getitem__(key)
+            assert v is None or isinstance(v, str)
+            return v
         return default
 
     def get_values(self, key: str) -> List[str]:
@@ -116,7 +122,7 @@ class ArchitectureReaderYaml(ArchitectureReader):
             tf_br = self.get_tf_broadcaster(node.node_name)
             if tf_br is None:
                 continue
-            frames |= set(tf_br.transforms)
+            frames |= set(tf_br.broadcast_transforms)
 
         return list(frames)
 
@@ -134,7 +140,7 @@ class ArchitectureReaderYaml(ArchitectureReader):
             p.get_value('topic_name')
             for p
             in publishes
-            if callback_id in p.get_value('callback_ids')]
+            if callback_id in p.get_values('callback_ids')]
         return topic_names
 
     def _get_timer_callbacks(
@@ -183,7 +189,7 @@ class ArchitectureReaderYaml(ArchitectureReader):
         context_dicts = node_dict.get_dicts('message_contexts')
         for context in context_dicts:
             # Verify the existence of the required key.
-            context.get_value('context_type')
+            context.get_value_with_default('context_type', None)
             pub_topic_name = context.get_value('publisher_topic_name')
             sub_topic_name = context.get_value('subscription_topic_name')
             if pub_topic_name == '/tf':
@@ -204,16 +210,19 @@ class ArchitectureReaderYaml(ArchitectureReader):
             return None
 
         tf_buffers = node_dict.get_dicts('tf_buffer')
-        transforms = tuple(TransformValue(
-            tf_buff.get_value('frame_id'), tf_buff.get_value('child_frame_id')
+        lookup_transforms = tuple(TransformValue(
+            tf_buff.get_value('lookup_frame_id'),
+            tf_buff.get_value('lookup_child_frame_id')
         ) for tf_buff in tf_buffers)
+        listen_transforms = self.get_tf_frames()
 
         buff_val = TransformBufferValue(
             lookup_node_id=node_dict.get_value('node_id'),
             lookup_node_name=node.node_name,
             listener_node_id=None,
             listener_node_name=None,
-            lookup_transforms=transforms
+            lookup_transforms=lookup_transforms,
+            listen_transforms=tuple(listen_transforms)
         )
         return buff_val
 
@@ -243,7 +252,7 @@ class ArchitectureReaderYaml(ArchitectureReader):
         cb_ids = []
         if 'callback_ids' in br_dict.keys():
             cb_ids = br_dict.get_values('callback_ids')
-            cb_ids = [cb_id for cb_id in cb_ids if cb_id != UNDEFINED_STR]
+            cb_ids = [cb_id for cb_id in cb_ids if cb_id is not None]
 
         br = TransformBroadcasterValue(tf_pub, tuple(transforms), tuple(cb_ids))
         return br
@@ -281,16 +290,35 @@ class ArchitectureReaderYaml(ArchitectureReader):
 
             node_chain: List[NodePathValue] = []
             for node_path_dict in alias.get_dicts('node_chain'):
+                args: Dict[str, Optional[str]] = {}
+
                 node_name = node_path_dict.get_value('node_name')
-                pub_topic = node_path_dict.get_value_with_default('publish_topic_name', None)
-                sub_topic = node_path_dict.get_value_with_default('subscribe_topic_name', None)
+                args['publish_topic_name'] = \
+                    node_path_dict.get_value_with_default(
+                        'publish_topic_name', None)
+                args['subscribe_topic_name'] = \
+                    node_path_dict.get_value_with_default(
+                        'subscribe_topic_name', None)
+                args['broadcast_frame_id'] = \
+                    node_path_dict.get_value_with_default(
+                        'broadcast_frame_id', None)
+                args['broadcast_child_frame_id'] = \
+                    node_path_dict.get_value_with_default(
+                        'broadcast_child_frame_id', None)
+                args['buffer_listen_frame_id'] = \
+                    node_path_dict.get_value_with_default(
+                        'buffer_listen_frame_id', None)
+                args['buffer_listen_child_frame_id'] = \
+                    node_path_dict.get_value_with_default(
+                        'buffer_listen_child_frame_id', None)
+                args['buffer_lookup_frame_id'] = \
+                    node_path_dict.get_value_with_default(
+                        'buffer_lookup_frame_id', None)
+                args['buffer_lookup_child_frame_id'] = \
+                    node_path_dict.get_value_with_default(
+                        'buffer_lookup_child_frame_id', None)
 
-                if pub_topic == UNDEFINED_STR:
-                    pub_topic = None
-                if sub_topic == UNDEFINED_STR:
-                    sub_topic = None
-
-                node_path_value = NodePathValue(node_name, sub_topic, pub_topic)
+                node_path_value = NodePathValue(node_name, **args)
                 node_chain.append(node_path_value)
 
             paths_info.append(
@@ -309,12 +337,12 @@ class ArchitectureReaderYaml(ArchitectureReader):
 
         var_passes = []
         for val in node_dict.get_dicts('variable_passings'):
+            write = val.get_value_with_default('callback_id_write', None)
+            read = val.get_value_with_default('callback_id_read', None)
+            if write is None or read is None:
+                continue
             var_passes.append(
-                VariablePassingValue(
-                    node.node_name,
-                    val.get_value('callback_id_write'),
-                    val.get_value('callback_id_read'),
-                )
+                VariablePassingValue(node.node_name, write, read)
             )
         return var_passes
 
@@ -424,7 +452,7 @@ class ArchitectureReaderYaml(ArchitectureReader):
                     node_name=node.node_name,
                     node_id=node.node_name,
                     topic_name=pub.get_value('topic_name'),
-                    callback_id=pub.get_value('callback_id'),
+                    callback_id=pub.get_value_with_default('callback_id', None),
                 )
             )
         return subscriptions

@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 from typing import List, Optional, Tuple, Union
+from multimethod import multimethod as singledispatchmethod
 
 from caret_analyze.value_objects.transform import TransformCommunicationStructValue
 
@@ -31,14 +32,13 @@ from .timer import Timer, TimerStructValue
 from .transform import (
     TransformBroadcaster,
     TransformBuffer,
-    TransformFrameBroadcaster,
 )
 
 from .variable_passing import VariablePassing
 from ..architecture import Architecture
 from ..common import Util
-from ..exceptions import (ItemNotFoundError, MultipleItemFoundError,
-                          UnsupportedTypeError)
+from ..exceptions import (InvalidArgumentError, ItemNotFoundError, MultipleItemFoundError,
+                          UnsupportedTypeError, Error)
 from ..infra.interface import RecordsProvider, RuntimeDataProvider
 from ..value_objects import (
     CallbackGroupStructValue,
@@ -54,9 +54,6 @@ from ..value_objects import (
     TimerCallbackStructValue,
     TransformBroadcasterStructValue,
     TransformBufferStructValue,
-    TransformFrameBroadcasterStructValue,
-    TransformFrameBufferStructValue,
-    TransformValue,
     VariablePassingStructValue,
 )
 
@@ -149,17 +146,14 @@ class NodesLoaded:
         node_value: NodeStructValue,
         provider: Union[RecordsProvider, RuntimeDataProvider],
     ) -> Node:
-        publishers_loaded = PublishersLoaded(
-            node_value.publishers, provider)
+        publishers_loaded = PublishersLoaded(node_value.publishers, provider)
         publishsers = publishers_loaded.data
 
         subscriptions_loaded = SubscriptionsLoaded(
             node_value.subscriptions, provider)
         subscriptions = subscriptions_loaded.data
 
-        timers_loaded = TimersLoaded(
-            node_value.timers, provider
-        )
+        timers_loaded = TimersLoaded(node_value.timers, provider)
         timers = timers_loaded.data
 
         cbgs: List[CallbackGroup] = []
@@ -172,24 +166,23 @@ class NodesLoaded:
                 timers_loaded
             ).data
 
+        tf_buffer_loaded = TfBufferLoaded(node_value.tf_buffer, provider)
+        tf_buffer = tf_buffer_loaded.data
+
+        tf_br_loaded = TfBroadcasterLoaded(node_value.tf_broadcaster, provider)
+        tf_br = tf_br_loaded.data
+
         callbacks = Util.flatten([_.callbacks for _ in cbgs])
         node_paths: List[NodePath]
         node_paths = NodePathsLoaded(
-            node_value.paths, provider, publishers_loaded, subscriptions_loaded, callbacks
+            node_value.paths, provider, publishers_loaded, subscriptions_loaded,
+            tf_buffer_loaded, tf_br_loaded, callbacks
         ).data
 
         variable_passings: List[VariablePassing] = []
         if node_value.variable_passings is not None:
             variable_passings = VariablePassingsLoaded(
                 node_value.variable_passings, provider).data
-
-        tf_buffer = None
-        if node_value.tf_buffer is not None:
-            tf_buffer = TfBufferLoaded(node_value.tf_buffer, provider).data
-
-        tf_br = None
-        if node_value.tf_broadcaster is not None:
-            tf_br = TfBroadcasterLoaded(node_value.tf_broadcaster, provider).data
 
         return Node(
             node_value,
@@ -275,11 +268,23 @@ class NodesLoaded:
         node_name: str,
         subscribe_topic_name: Optional[str],
         publish_topic_name: Optional[str],
+        tf_broadcast_frame_id: Optional[str],
+        tf_broadcast_child_frame_id: Optional[str],
+        tf_buffer_lookup_frame_id: Optional[str],
+        tf_buffer_lookup_child_frame_id: Optional[str],
+        tf_buffer_listen_frame_id: Optional[str],
+        tf_buffer_listen_child_frame_id: Optional[str],
     ) -> NodePath:
         def is_target(node_path: NodePath):
             return node_path.publish_topic_name == publish_topic_name and \
                 node_path.subscribe_topic_name == subscribe_topic_name and \
-                node_path.node_name == node_name
+                node_path.node_name == node_name and \
+                node_path.tf_broadcast_frame_id == tf_broadcast_frame_id and \
+                node_path.tf_broadcast_child_frame_id == tf_broadcast_child_frame_id and \
+                node_path.tf_buffer_lookup_frame_id == tf_buffer_lookup_frame_id and \
+                node_path.tf_buffer_lookup_child_frame_id == tf_buffer_lookup_child_frame_id and\
+                node_path.tf_buffer_listen_frame_id == tf_buffer_listen_frame_id and \
+                node_path.tf_buffer_listen_child_frame_id == tf_buffer_listen_child_frame_id
 
         try:
             node_paths = Util.flatten([n.paths for n in self._nodes])
@@ -315,58 +320,47 @@ class PublishersLoaded:
     def data(self) -> List[Publisher]:
         return self._pubs
 
-    def get_publishers(
+    def get_publishers_by_cb_name(
         self,
-        node_name: Optional[str],
-        callback_name: Optional[str],
-        topic_name: Optional[str],
+        callback_name: str
     ) -> List[Publisher]:
-        is_target = PublishersLoaded.IsTarget(node_name, callback_name, topic_name)
+        def is_target(publisher: Publisher):
+            if publisher.callback_names is None:
+                return None
+            return callback_name in publisher.callback_names
+
         return Util.filter_items(is_target, self._pubs)
 
-    def get_publisher(
+    @singledispatchmethod
+    def get_publisher(self, arg) -> Publisher:
+        raise InvalidArgumentError('')
+
+    @get_publisher.register
+    def _get_publisher_dict(
         self,
         node_name: Optional[str],
-        callback_name: Optional[str],
         topic_name: Optional[str],
     ) -> Publisher:
         try:
-            is_target = PublishersLoaded.IsTarget(node_name, callback_name, topic_name)
+            def is_target(publisher: Publisher):
+                return publisher.node_name == node_name and \
+                    publisher.topic_name == topic_name
             return Util.find_one(is_target, self._pubs)
         except ItemNotFoundError:
             msg = 'Failed to find publisher. '
             msg += f'node_name: {node_name}, '
-            msg += f'callback_name: {callback_name}, '
             msg += f'topic_name: {topic_name}, '
             raise ItemNotFoundError(msg)
 
-    class IsTarget:
-        def __init__(
-            self,
-            node_name: Optional[str],
-            callback_name: Optional[str],
-            topic_name: Optional[str]
-        ) -> None:
-            self._node_name = node_name
-            self._callback_name = callback_name
-            self._topic_name = topic_name
-
-        def __call__(self, pub: Publisher) -> bool:
-            topic_match = True
-            if self._topic_name is not None:
-                topic_match = self._topic_name == pub.topic_name
-
-            node_match = True
-            if self._node_name is not None:
-                node_match = self._node_name == pub.node_name
-
-            callback_match = True
-            if self._callback_name is not None:
-                if pub.callback_names is None:
-                    callback_match = False
-                else:
-                    callback_match = self._callback_name in pub.callback_names
-            return topic_match and node_match and callback_match
+    @get_publisher.register
+    def _get_publisher_struct(
+        self,
+        publisher: PublisherStructValue
+    ) -> Publisher:
+        return self._get_publisher_dict(
+            publisher.node_name,
+            publisher.topic_name
+        )
 
 
 class SubscriptionsLoaded:
@@ -392,55 +386,42 @@ class SubscriptionsLoaded:
     def data(self) -> List[Subscription]:
         return self._subs
 
-    def get_subscriptions(
+    def get_subscription_by_cb_name(
         self,
-        node_name: Optional[str],
-        callback_name: Optional[str],
-        topic_name: Optional[str],
-    ) -> List[Subscription]:
-        is_target = SubscriptionsLoaded.IsTarget(node_name, callback_name, topic_name)
-        return Util.filter_items(is_target, self._subs)
+        callback_name: str
+    ) -> Subscription:
+        def is_target(subscription: Subscription):
+            if subscription.callback_name is None:
+                return None
+            return callback_name == subscription.callback_name
+        return Util.find_one(is_target, self._subs)
 
-    def get_subscription(
+    @singledispatchmethod
+    def get_subscription(self, arg) -> Subscription:
+        raise InvalidArgumentError('')
+
+    @get_subscription.register
+    def _get_subscription_dict(
         self,
         node_name: Optional[str],
-        callback_name: Optional[str],
         topic_name: Optional[str],
     ) -> Subscription:
+        def is_target(subscription: Subscription):
+            return subscription.node_name == node_name and \
+                subscription.topic_name == topic_name
         try:
-            is_target = SubscriptionsLoaded.IsTarget(node_name, callback_name, topic_name)
             return Util.find_one(is_target, self._subs)
         except ItemNotFoundError:
             msg = 'Failed to find subscription. '
             msg += f'node_name: {node_name}, '
-            msg += f'callback_name: {callback_name}, '
             msg += f'topic_name: {topic_name}, '
             raise ItemNotFoundError(msg)
 
-    class IsTarget:
-        def __init__(
-            self,
-            node_name: Optional[str],
-            callback_name: Optional[str],
-            topic_name: Optional[str]
-        ) -> None:
-            self._node_name = node_name
-            self._callback_name = callback_name
-            self._topic_name = topic_name
-
-        def __call__(self, sub: Subscription) -> bool:
-            topic_match = True
-            if self._topic_name is not None:
-                topic_match = self._topic_name == sub.topic_name
-
-            node_match = True
-            if self._node_name is not None:
-                node_match = self._node_name == sub.node_name
-
-            callback_match = True
-            if self._callback_name is not None:
-                callback_match = self._callback_name == sub.callback_name
-            return topic_match and node_match and callback_match
+    @get_subscription.register
+    def _get_subscription_struct(self, subscription: SubscriptionStructValue) -> Subscription:
+        return self._get_subscription_dict(
+            subscription.node_name,
+            subscription.topic_name)
 
 
 class TimersLoaded:
@@ -524,11 +505,14 @@ class NodePathsLoaded:
         provider: RecordsProvider,
         publisher_loaded: PublishersLoaded,
         subscription_loaded: SubscriptionsLoaded,
+        tf_buffer_loaded: TfBufferLoaded,
+        tf_broadcaster_loaded: TfBroadcasterLoaded,
         callbacks: List[CallbackBase],
     ) -> None:
         self._data = [
             self._to_runtime(
-                node_path_value, provider, publisher_loaded, subscription_loaded, callbacks)
+                node_path_value, provider, publisher_loaded, subscription_loaded,
+                tf_buffer_loaded, tf_broadcaster_loaded, callbacks)
             for node_path_value
             in node_path_values
         ]
@@ -539,34 +523,40 @@ class NodePathsLoaded:
         provider: RecordsProvider,
         publisher_loaded: PublishersLoaded,
         subscription_loaded: SubscriptionsLoaded,
+        tf_buffer_loaded: TfBufferLoaded,
+        tf_broadcaster_loaded: TfBroadcasterLoaded,
         callbacks: List[CallbackBase]
     ) -> NodePath:
         publisher: Optional[Publisher] = None
         subscription: Optional[Subscription] = None
 
-        try:
+        publisher = None
+        if node_path_value.publisher is not None:
             publisher = publisher_loaded.get_publisher(
-                node_path_value.node_name,
-                None,
-                node_path_value.publish_topic_name
-            )
-        except ItemNotFoundError:
-            pass
-        except MultipleItemFoundError:
-            pass
+                node_path_value.publisher)
 
-        try:
+        subscription = None
+        if node_path_value.subscription is not None:
             subscription = subscription_loaded.get_subscription(
-                node_path_value.node_name,
-                None,
-                node_path_value.subscribe_topic_name
-            )
-        except ItemNotFoundError:
-            pass
-        except MultipleItemFoundError:
-            pass
+                node_path_value.subscription)
 
-        return NodePath(node_path_value, provider, subscription, publisher, callbacks)
+        tf_broadcaster = None
+        if node_path_value.tf_frame_broadcaster is not None and\
+                tf_broadcaster_loaded.data is not None:
+            tf_br = tf_broadcaster_loaded.data
+            tf_broadcaster = tf_br.get(
+                node_path_value.tf_frame_broadcaster.transform)
+
+        tf_buffer = None
+        if node_path_value.tf_frame_buffer is not None and\
+                tf_buffer_loaded.data is not None:
+            tf_buf = tf_buffer_loaded.data
+            tf_buffer = tf_buf.get(
+                node_path_value.tf_frame_buffer.listen_transform,
+                node_path_value.tf_frame_buffer.lookup_transform
+            )
+        return NodePath(node_path_value, provider, subscription,
+                        publisher, callbacks, tf_broadcaster, tf_buffer)
 
     @property
     def data(self) -> List[NodePath]:
@@ -574,12 +564,15 @@ class NodePathsLoaded:
 
 
 class TfBufferLoaded:
+
     def __init__(
         self,
-        tf_buffer: TransformBufferStructValue,
+        tf_buffer: Optional[TransformBufferStructValue],
         provider: RecordsProvider,
     ) -> None:
-        self._data = self._to_runtime(tf_buffer, provider)
+        self._data: Optional[TransformBuffer] = None
+        if tf_buffer is not None:
+            self._data = self._to_runtime(tf_buffer, provider)
 
     @staticmethod
     def _to_runtime(
@@ -590,18 +583,45 @@ class TfBufferLoaded:
             tf_buffer, provider
         )
 
+    # @singledispatchmethod
+    # def get_frame_buffer(self, arg) -> TransformFrameBuffer:
+    #     pass
+
+    # @get_frame_buffer.register
+    # def _get_frame_buffer_struct(
+    #     self,
+    #     tf_buffer_struct: TransformBufferStructValue,
+    # ) -> TransformFrameBuffer:
+    #     return
+
+    # @get_frame_buffer.register
+    # def _get_frame_buffer_dict(
+    #     self,
+    #     listen_frame_id: str,
+    #     listen_child_frame_id: str,
+    #     lookup_frame_id: str,
+    #     lookup_child_frame_id: str
+    # ) -> TransformFrameBuffer:
+    #     return self._data.get(
+    #         listen_frame_id,
+    #         listen_child_frame_id,
+    #         lookup_frame_id,
+    #         lookup_child_frame_id)
+
     @property
-    def data(self) -> TransformBuffer:
+    def data(self) -> Optional[TransformBuffer]:
         return self._data
 
 
 class TfBroadcasterLoaded:
     def __init__(
         self,
-        tf_broadcaster: TransformBroadcasterStructValue,
+        tf_broadcaster: Optional[TransformBroadcasterStructValue],
         provider: RecordsProvider,
     ) -> None:
-        self._data = self._to_runtime(tf_broadcaster, provider)
+        self._data: Optional[TransformBroadcaster] = None
+        if tf_broadcaster is not None:
+            self._data = self._to_runtime(tf_broadcaster, provider)
 
     @staticmethod
     def _to_runtime(
@@ -614,7 +634,7 @@ class TfBroadcasterLoaded:
         )
 
     @property
-    def data(self) -> TransformBroadcaster:
+    def data(self) -> Optional[TransformBroadcaster]:
         return self._data
 
 
@@ -664,7 +684,8 @@ class PathsLoaded:
         nodes_loaded: NodesLoaded,
         comms_loaded: CommunicationsLoaded,
     ) -> Path:
-        child: List[Union[NodePath, Communication]] = []
+        child: List[Union[NodePath, Communication,
+                          TransformCommunication]] = []
         callbacks: List[CallbackBase] = []
         for elem_info in path_info.child:
             child.append(
@@ -680,23 +701,29 @@ class PathsLoaded:
 
     @staticmethod
     def _get_loaded(
-        path_element: Union[NodePathStructValue, CommunicationStructValue],
+        path_element: Union[
+            NodePathStructValue, CommunicationStructValue, TransformCommunicationStructValue],
         nodes_loaded: NodesLoaded,
-        comms_loaded: CommunicationsLoaded,
-    ) -> Union[NodePath, Communication]:
+        comms: CommunicationsLoaded,
+    ) -> Union[NodePath, Communication, TransformCommunication]:
         if isinstance(path_element, NodePathStructValue):
             return nodes_loaded.find_node_path(
                 path_element.node_name,
                 path_element.subscribe_topic_name,
-                path_element.publish_topic_name
+                path_element.publish_topic_name,
+                path_element.tf_broadcast_frame_id,
+                path_element.tf_broadcast_child_frame_id,
+                path_element.tf_buffer_lookup_frame_id,
+                path_element.tf_buffer_lookup_child_frame_id,
+                path_element.tf_buffer_listen_frame_id,
+                path_element.tf_buffer_listen_child_frame_id,
             )
 
         if isinstance(path_element, CommunicationStructValue):
-            return comms_loaded.find_communication(
-                path_element.topic_name,
-                path_element.publish_node_name,
-                path_element.subscribe_node_name
-            )
+            return comms.get(path_element)
+
+        if isinstance(path_element, TransformCommunicationStructValue):
+            return comms.get(path_element)
 
         msg = 'Given type is neither NodePathStructInfo nor CommunicationStructInfo.'
         raise UnsupportedTypeError(msg)
@@ -723,7 +750,7 @@ class CommunicationsLoaded:
                 else:
                     raise NotImplementedError('')
                 self._data.append(comm)
-            except (ItemNotFoundError, MultipleItemFoundError):
+            except Error as e:
                 pass
 
     @property
@@ -735,15 +762,18 @@ class CommunicationsLoaded:
         communication_value: TransformCommunicationStructValue,
         provider: RecordsProvider,
         nodes_loaded: NodesLoaded,
-    ) -> TransformCommunicationStructValue:
+    ) -> TransformCommunication:
         node_br = nodes_loaded.find_node(communication_value.broadcaster.node_name)
         node_buf = nodes_loaded.find_node(communication_value.buffer.lookup_node_name)
 
         assert node_br.tf_broadcaster is not None
-        tf_broadcaster = node_br.tf_broadcaster.get(communication_value.transform)
+        tf_broadcaster = node_br.tf_broadcaster.get(
+            communication_value.broadcast_transform)
 
         assert node_buf.tf_buffer is not None
-        tf_buffer = node_buf.tf_buffer.get(communication_value.transform)
+        tf_buffer = node_buf.tf_buffer.get(
+            communication_value.listen_transform,
+            communication_value.lookup_transform)
 
         return TransformCommunication(
             node_br, node_buf,
@@ -770,7 +800,7 @@ class CommunicationsLoaded:
 
         # cb_sub: Optional[CallbackBase] = None
         # if communication_value.subscribe_callback_name is not None:
-        #     cb_name = communication_value.subscribe_callback_name
+        #     cb_name q= communication_value.subscribe_callback_name
         #     cb_sub = nodes_loaded.find_callback(cb_name)
 
         topic_name = communication_value.topic_name
@@ -782,16 +812,72 @@ class CommunicationsLoaded:
             publisher, subscription, communication_value,
             provider)
 
-    def find_communication(
+    @singledispatchmethod
+    def get(self, arg) -> Communication:
+        raise InvalidArgumentError('')
+
+    @get.register
+    def _get_strct(
+        self,
+        comm: CommunicationStructValue
+    ) -> Communication:
+        return self._get_dict(
+            comm.topic_name,
+            comm.publish_node_name,
+            comm.subscribe_node_name
+        )
+
+    @get.register
+    def _get_dict(
         self,
         topic_name: str,
         publish_node_name: str,
         subscribe_node_name: str,
     ) -> Communication:
-        def is_target(comm: Communication):
-            return comm.publish_node_name == publish_node_name and \
-                comm.subscribe_node_name == subscribe_node_name and \
-                comm.topic_name == topic_name
+        def is_target(comm: Union[Communication, TransformCommunication]):
+            if isinstance(comm, Communication):
+                return (
+                    comm.topic_name == topic_name
+                    and comm.publish_node_name == publish_node_name
+                    and comm.subscribe_node_name == subscribe_node_name
+                )
+            return False
+
+        return Util.find_one(is_target, self._data)
+
+    @get.register
+    def _get_tf_strct(
+        self,
+        comm: TransformCommunicationStructValue
+    ) -> TransformCommunication:
+        return self._get_tf_dict(
+            comm.broadcast_node_name,
+            comm.lookup_node_name,
+            comm.broadcast_frame_id,
+            comm.broadcast_child_frame_id,
+            comm.lookup_frame_id,
+            comm.lookup_child_frame_id
+        )
+
+    @get.register
+    def _get_tf_dict(
+        self,
+        broadcast_node_name: str,
+        lookup_node_name: str,
+        broadcast_frame_id: str,
+        broadcast_child_frame_id: str,
+        lookup_frame_id: str,
+        lookup_child_frame_id: str,
+    ) -> TransformCommunication:
+        def is_target(comm: Union[Communication, TransformCommunication]):
+            if isinstance(comm, TransformCommunication):
+                return comm.broadcast_node_name == broadcast_node_name and \
+                    comm.lookup_node_name == lookup_node_name and \
+                    comm.tf_broadcaster.frame_id == broadcast_frame_id and \
+                    comm.tf_broadcaster.child_frame_id == broadcast_child_frame_id and \
+                    comm.tf_buffer.lookup_frame_id == lookup_frame_id and \
+                    comm.tf_buffer.lookup_child_frame_id == lookup_child_frame_id
+            return False
 
         return Util.find_one(is_target, self._data)
 
@@ -825,8 +911,8 @@ class CallbacksLoaded:
         publishers: Optional[List[Publisher]] = None
 
         if callback_value.publish_topic_names is not None:
-            publishers = publishers_loaded.get_publishers(
-                None, callback_value.callback_name, None)
+            publishers = publishers_loaded.get_publishers_by_cb_name(
+                callback_value.callback_name)
 
         if isinstance(callback_value, TimerCallbackStructValue):
             timer = timers_loaded.get_timer(
@@ -838,8 +924,8 @@ class CallbacksLoaded:
                 timer
             )
         if isinstance(callback_value, SubscriptionCallbackStructValue):
-            subscription = subscriptions_loaded.get_subscription(
-                None, callback_value.callback_name, None)
+            subscription = subscriptions_loaded.get_subscription_by_cb_name(
+                callback_value.callback_name)
             return SubscriptionCallback(
                 callback_value,
                 provider,

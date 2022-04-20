@@ -48,6 +48,7 @@ class TransformBufferValueLttng(TransformBufferValue):
         listener_node_name: Optional[str],
         listener_node_id: Optional[str],
         lookup_transforms: Optional[Tuple[TransformValue, ...]],
+        listen_transforms: Optional[Tuple[TransformValue, ...]],
         buffer_handler: int
     ) -> None:
         super().__init__(
@@ -55,7 +56,8 @@ class TransformBufferValueLttng(TransformBufferValue):
             lookup_node_id,
             listener_node_name,
             listener_node_id,
-            lookup_transforms)
+            lookup_transforms,
+            listen_transforms)
         self._buffer_handler = buffer_handler
 
     @property

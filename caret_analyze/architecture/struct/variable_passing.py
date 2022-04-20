@@ -9,12 +9,12 @@ from typing import (
     Tuple,
 )
 
-from .callback import CallbacksStruct, CallbackStruct
-from ..reader_interface import ArchitectureReader, UNDEFINED_STR
-from ...value_objects import NodeValue, VariablePassingStructValue
+from .callback import CallbackStruct
+from .struct_interface import VariablePassingsStructInterface, VariablePassingStructInterface
+from ...value_objects import VariablePassingStructValue
 
 
-class VariablePassingStruct():
+class VariablePassingStruct(VariablePassingStructInterface):
 
     def __init__(
         self,
@@ -36,19 +36,28 @@ class VariablePassingStruct():
         assert self._callback_write is not None
         return self._callback_write
 
+    @property
     def callback_read(self) -> CallbackStruct:
         assert self._callback_read is not None
         return self._callback_read
 
+    @property
+    def callback_name_read(self) -> Optional[str]:
+        return self.callback_read.callback_name
+
+    @property
+    def callback_name_write(self) -> Optional[str]:
+        return self.callback_write.callback_name
+
     def to_value(self) -> VariablePassingStructValue:
         return VariablePassingStructValue(
             node_name=self.node_name,
-            callback_write=self.callback_write,
-            callback_read=self.callback_read,
+            callback_write=self.callback_write.to_value(),
+            callback_read=self.callback_read.to_value(),
         )
 
 
-class VariablePassingsStruct(Iterable):
+class VariablePassingsStruct(VariablePassingsStructInterface, Iterable):
 
     def __init__(self) -> None:
         self._data: List[VariablePassingStruct] = []
@@ -58,27 +67,6 @@ class VariablePassingsStruct(Iterable):
 
     def __iter__(self) -> Iterator[VariablePassingStruct]:
         return iter(self._data)
-
-    @staticmethod
-    def create_from_reader(
-        reader: ArchitectureReader,
-        callbacks: CallbacksStruct,
-        node: NodeValue,
-    ) -> VariablePassingsStruct:
-        var_passes = VariablePassingsStruct()
-
-        for var_pass_value in reader.get_variable_passings(node.node_name):
-            if var_pass_value.callback_id_read == UNDEFINED_STR or\
-                    var_pass_value.callback_id_write == UNDEFINED_STR:
-                continue
-            var_pass = VariablePassingStruct(
-                    node.node_name,
-                    callback_write=callbacks.get_callback(var_pass_value.callback_id_write),
-                    callback_read=callbacks.get_callback(var_pass_value.callback_id_read)
-                )
-            var_passes.add(var_pass)
-
-        return var_passes
 
     def to_value(self) -> Tuple[VariablePassingStructValue, ...]:
         return tuple(_.to_value() for _ in self._data)

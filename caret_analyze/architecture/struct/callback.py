@@ -23,14 +23,19 @@ from typing import (
     List,
     Optional,
     Tuple,
-    Union,
 )
 
-from .publisher import PublisherStruct
-from .struct_interface import CallbacksStructInterface, CallbackStructInterface
-from .subscription import SubscriptionStruct
+from .publisher import PublishersStruct
+from .struct_interface import (
+    CallbacksStructInterface,
+    CallbackStructInterface,
+    NodeInputType,
+    NodeOutputType,
+    PublishersStructInterface,
+    SubscriptionStructInterface,
+)
+from .subscription import SubscriptionsStruct, SubscriptionStruct
 from .transform import TransformFrameBroadcasterStruct, TransformFrameBufferStruct
-from ..reader_interface import ArchitectureReader
 from ...common import Util
 from ...exceptions import ItemNotFoundError, UnsupportedTypeError
 from ...value_objects import (
@@ -44,9 +49,6 @@ from ...value_objects import (
     TimerCallbackValue,
 )
 
-NodeIn = Union[PublisherStruct, TransformFrameBroadcasterStruct]
-NodeOut = Union[SubscriptionStruct, TransformFrameBufferStruct]
-
 
 class CallbackStruct(CallbackStructInterface):
 
@@ -56,15 +58,19 @@ class CallbackStruct(CallbackStructInterface):
         callback_id: str,
         node_name: Optional[str] = None,
         symbol: Optional[str] = None,
-        subscribe_topic_name: Optional[str] = None,
-        publish_topic_names: Optional[List[str]] = None,
+        subscription: Optional[SubscriptionStructInterface] = None,
+        publishers: Optional[PublishersStructInterface] = None,
+        tf_buffers: Optional[List[TransformFrameBufferStruct]] = None,
+        tf_broadcasters: Optional[List[TransformFrameBroadcasterStruct]] = None,
     ):
         self._node_name = node_name
         self._callback_name = callback_name
         self._callback_id = callback_id
         self._symbol = symbol
-        self._subscribe_topic_name = subscribe_topic_name
-        self._publish_topic_names = publish_topic_names
+        self._sub = subscription
+        self._pubs = publishers
+        self._tf_buffers = tf_buffers
+        self._tf_broadcasters = tf_broadcasters
 
     @property
     def symbol(self) -> str:
@@ -86,38 +92,58 @@ class CallbackStruct(CallbackStructInterface):
 
     @property
     def subscribe_topic_name(self) -> Optional[str]:
-        return self._subscribe_topic_name
+        if isinstance(self._sub, SubscriptionStruct):
+            return self._sub.topic_name
+        return None
 
     @property
     def publish_topic_names(self) -> Optional[List[str]]:
-        return self._publish_topic_names
+        if isinstance(self._pubs, PublishersStruct):
+            return [pub.topic_name for pub in self._pubs]
+        return None
 
     @staticmethod
-    def create_instance(callback: CallbackValue, index: int) -> CallbackStruct:
+    def create_instance(
+        subscriptions: SubscriptionsStruct,
+        publishers: PublishersStruct,
+        callback: CallbackValue,
+        index: int
+    ) -> CallbackStruct:
 
         indexed = Util.indexed_name(f'{callback.node_name}/callback', index)
 
         callback_name = callback.callback_name or indexed
+        node_name = callback.node_name
         callback_id = callback.callback_id
-        publish_topic_names = None if callback.publish_topic_names is None \
-            else list(callback.publish_topic_names)
+        sub = None
+        if callback.subscribe_topic_name is not None:
+            sub = subscriptions.get(node_name, callback.subscribe_topic_name)
+
+        pubs = None
+        if callback.publish_topic_names is not None:
+            pubs = PublishersStruct()
+            for pub_topic_name in callback.publish_topic_names:
+                pub = publishers.get(node_name, pub_topic_name)
+                pubs.insert(pub)
+
         if isinstance(callback, TimerCallbackValue):
 
             return TimerCallbackStruct(
-                node_name=callback.node_name,
+                node_name=node_name,
                 symbol=callback.symbol,
                 period_ns=callback.period_ns,
-                publish_topic_names=publish_topic_names,
+                subscription=sub,
+                publishers=pubs,
                 callback_name=callback_name,
                 callback_id=callback_id
             )
         if isinstance(callback, SubscriptionCallbackValue):
             assert callback.subscribe_topic_name is not None
             return SubscriptionCallbackStruct(
-                node_name=callback.node_name,
+                node_name=node_name,
                 symbol=callback.symbol,
-                subscribe_topic_name=callback.subscribe_topic_name,
-                publish_topic_names=publish_topic_names,
+                subscription=sub,
+                publishers=pubs,
                 callback_name=callback_name,
                 callback_id=callback_id
             )
@@ -128,12 +154,29 @@ class CallbackStruct(CallbackStructInterface):
         pass
 
     @property
-    def node_in(self) -> Optional[NodeIn]:
-        raise NotImplementedError('')
+    def node_inputs(self) -> Optional[List[NodeInputType]]:
+        inputs: List[NodeInputType] = []
+        if self._sub is not None:
+            inputs.append(self._sub)
+        if self._tf_buffers is not None:
+            inputs.extend(self._tf_buffers)
+
+        if inputs == []:
+            return None
+        return inputs
 
     @property
-    def node_out(self) -> Optional[List[NodeOut]]:
-        raise NotImplementedError('')
+    def node_outputs(self) -> Optional[List[NodeOutputType]]:
+        outputs: List[NodeOutputType] = []
+        if self._pubs is not None:
+            outputs.extend(self._pubs.as_list())
+        if self._tf_broadcasters is not None:
+            outputs.extend(self._tf_broadcasters)
+
+        if outputs == []:
+            return None
+
+        return outputs
 
 
 class TimerCallbackStruct(CallbackStruct):
@@ -144,14 +187,14 @@ class TimerCallbackStruct(CallbackStruct):
         period_ns: Optional[int] = None,
         node_name: Optional[str] = None,
         symbol: Optional[str] = None,
-        subscribe_topic_name: Optional[str] = None,
-        publish_topic_names: Optional[List[str]] = None,
+        subscription: Optional[SubscriptionStructInterface] = None,
+        publishers: Optional[PublishersStructInterface] = None,
     ) -> None:
         super().__init__(
             node_name=node_name,
             symbol=symbol,
-            subscribe_topic_name=subscribe_topic_name,
-            publish_topic_names=publish_topic_names,
+            subscription=subscription,
+            publishers=publishers,
             callback_name=callback_name,
             callback_id=callback_id)
 
@@ -184,22 +227,22 @@ class SubscriptionCallbackStruct(CallbackStruct):
         callback_id: str,
         node_name: Optional[str] = None,
         symbol: Optional[str] = None,
-        subscribe_topic_name: Optional[str] = None,
-        publish_topic_names: Optional[List[str]] = None,
+        subscription: Optional[SubscriptionStructInterface] = None,
+        publishers: Optional[PublishersStructInterface] = None,
     ) -> None:
         super().__init__(
             node_name=node_name,
             symbol=symbol,
-            subscribe_topic_name=subscribe_topic_name,
-            publish_topic_names=publish_topic_names,
+            subscription=subscription,
+            publishers=publishers,
             callback_name=callback_name,
             callback_id=callback_id)
-        self.__subscribe_topic_name = subscribe_topic_name
+        self.__subscription = subscription
 
     @property
     def subscribe_topic_name(self) -> str:
-        assert self.__subscribe_topic_name is not None
-        return self.__subscribe_topic_name
+        assert self.__subscription is not None
+        return self.__subscription.topic_name
 
     def to_value(self) -> SubscriptionCallbackStructValue:
         publish_topic_names = None if self.publish_topic_names is None \
@@ -236,23 +279,6 @@ class CallbacksStruct(CallbacksStructInterface, Iterable):
         for callback in callbacks:
             self.insert(callback)
         return None
-
-    @staticmethod
-    def create_from_reader(
-        reader: ArchitectureReader,
-        node: NodeValue,
-    ) -> CallbacksStruct:
-        callbacks = CallbacksStruct()
-
-        callback_values: List[CallbackValue] = []
-        callback_values += reader.get_timer_callbacks(node.node_name)
-        callback_values += reader.get_subscription_callbacks(node.node_name)
-
-        for i, callback_value in enumerate(callback_values):
-            callback = CallbackStruct.create_instance(callback_value, i)
-            callbacks.insert(callback)
-
-        return callbacks
 
     @property
     def node_name(self) -> str:

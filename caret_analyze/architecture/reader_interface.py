@@ -38,7 +38,6 @@ from ..value_objects import (
     VariablePassingValue
 )
 
-UNDEFINED_STR = 'UNDEFINED'
 IGNORE_TOPICS = ['/parameter_events', '/rosout', '/clock']
 
 

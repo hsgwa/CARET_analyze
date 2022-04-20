@@ -26,7 +26,6 @@ from .callback import (
     CallbacksStruct,
 )
 
-from ..reader_interface import ArchitectureReader
 from ...value_objects import (
     CallbackGroupStructValue,
     CallbackGroupType,
@@ -122,31 +121,6 @@ class CallbackGroupsStruct(Iterable):
         for cbg_id in callback_group_ids:
             # TODO(hsgwa): implement error
             cbg = self.get_cbg(cbg_id)
-            cbgs.insert(cbg)
-
-        return cbgs
-
-    @staticmethod
-    def create_from_reader(
-        reader: ArchitectureReader,
-        callbacks: CallbacksStruct,
-        node: NodeValue,
-    ) -> CallbackGroupsStruct:
-
-        cbgs = CallbackGroupsStruct()
-        cbgs.node = node
-
-        for i, cbg_value in enumerate(reader.get_callback_groups(node.node_name)):
-            cbg_name = cbg_value.callback_group_name or f'{node.node_name}/callback_group_{i}'
-
-            cbg = CallbackGroupStruct(
-                callback_group_type=cbg_value.callback_group_type,
-                node_name=node.node_name,
-                callbacks=callbacks.get_callback_by_cbg(cbg_value),
-                callback_group_name=cbg_name,
-                callback_group_id=cbg_value.callback_group_id,
-            )
-
             cbgs.insert(cbg)
 
         return cbgs

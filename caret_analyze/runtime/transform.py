@@ -15,15 +15,18 @@
 from __future__ import annotations
 
 from typing import List, Union
-
+from multimethod import multimethod as singledispatchmethod
 
 from .path_base import PathBase
 from ..common import Summarizable
 from ..infra import RecordsProvider, RuntimeDataProvider
 from ..record import RecordsInterface
+from ..exceptions import InvalidArgumentError, ItemNotFoundError
 from ..value_objects import (
     TransformBroadcasterStructValue,
     TransformBufferStructValue,
+    TransformFrameBufferStructValue,
+    TransformFrameBroadcasterStructValue,
     TransformValue,
 )
 
@@ -32,28 +35,34 @@ class TransformFrameBuffer(PathBase):
 
     def __init__(
         self,
-        buffer: TransformBufferStructValue,
-        transform: TransformValue,
+        buffer: TransformFrameBufferStructValue,
         provider: Union[RecordsProvider, RuntimeDataProvider]
     ) -> None:
         self._buff = buffer
         self._provider = provider
-        self._transform = transform
 
     @property
-    def frame_id(self) -> str:
-        return self._transform.frame_id
+    def lookup_frame_id(self) -> str:
+        return self._buff.lookup_frame_id
+
+    @property
+    def lookup_child_frame_id(self) -> str:
+        return self._buff.lookup_child_frame_id
+
+    @property
+    def listen_frame_id(self) -> str:
+        return self._buff.listen_frame_id
+
+    @property
+    def listen_child_frame_id(self) -> str:
+        return self._buff.listen_child_frame_id
 
     # @property
     # def summary(self) -> Summary:
     #     return self._buff.summary
 
-    @property
-    def child_frame_id(self) -> str:
-        return self._transform.child_frame_id
-
     def _to_records_core(self) -> RecordsInterface:
-        return self._provider.tf_set_lookup_records(self._buff, self._transform)
+        return self._provider.tf_set_lookup_records(self._buff)
 
 
 class TransformBuffer():
@@ -70,35 +79,70 @@ class TransformBuffer():
     def lookup_transforms(self) -> List[TransformValue]:
         return list(self._buff.lookup_transforms)
 
-    def get(self, transform: TransformValue) -> TransformFrameBuffer:
-        return TransformFrameBuffer(self._buff, transform, self._provider)
+    @property
+    def listen_transforms(self) -> List[TransformValue]:
+        return list(self._buff.listen_transforms)
+
+    @singledispatchmethod
+    def get(self, arg) -> TransformFrameBuffer:
+        raise InvalidArgumentError('')
+
+    @get.register
+    def _get_tf_value(
+        self,
+        listen_transform: TransformValue,
+        lookup_transform: TransformValue,
+    ) -> TransformFrameBuffer:
+        return self._get_tf_dist(
+            listen_transform.frame_id,
+            listen_transform.child_frame_id,
+            lookup_transform.frame_id,
+            lookup_transform.child_frame_id,
+        )
+
+    @get.register
+    def _get_tf_dist(
+        self,
+        listen_frame_id: str,
+        listen_child_frame_id: str,
+        lookup_frame_id: str,
+        lookup_child_frame_id: str,
+    ) -> TransformFrameBuffer:
+        frame_buff = self._buff.get_frame_buffer(
+            listen_frame_id,
+            listen_child_frame_id,
+            lookup_frame_id,
+            lookup_child_frame_id)
+        return TransformFrameBuffer(frame_buff, self._provider)
 
 
 class TransformFrameBroadcaster(PathBase):
     def __init__(
         self,
-        broadcaster: TransformBroadcasterStructValue,
-        transform: TransformValue,
+        broadcaster: TransformFrameBroadcasterStructValue,
         provider: Union[RecordsProvider, RuntimeDataProvider]
     ) -> None:
         self._broadcaster = broadcaster
-        self._transform = transform
         self._provider = provider
 
     @property
+    def transform(self) -> TransformValue:
+        return self._broadcaster.transform
+
+    @property
     def frame_id(self) -> str:
-        return self._transform.frame_id
+        return self._broadcaster.frame_id
 
     @property
     def child_frame_id(self) -> str:
-        return self._transform.child_frame_id
+        return self._broadcaster.child_frame_id
 
     @property
     def topic_name(self) -> str:
         return self._broadcaster.topic_name
 
     def _to_records_core(self) -> RecordsInterface:
-        records = self._provider.tf_broadcast_records(self._broadcaster, self._transform)
+        records = self._provider.tf_broadcast_records(self._broadcaster)
         return records
 
 
@@ -111,11 +155,20 @@ class TransformBroadcaster():
     ) -> None:
         self._broadcaster = broadcaster
         self._provider = provider
+        self._frame_brs = []
+
+        for tf in broadcaster.transforms:
+            frame_br_value = broadcaster.get(tf)
+            frame_br = TransformFrameBroadcaster(frame_br_value, provider)
+            self._frame_brs.append(frame_br)
 
     @property
     def transforms(self) -> List[TransformValue]:
         return list(self._broadcaster.transforms)
 
-    def get(self, transforms: TransformValue):
-        return TransformFrameBroadcaster(self._broadcaster, transforms, self._provider)
+    def get(self, transform: TransformValue):
+        for br in self._frame_brs:
+            if br.transform == transform:
+                return br
+        raise ItemNotFoundError('TransformFrameBroadcaster')
 

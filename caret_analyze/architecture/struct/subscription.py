@@ -15,20 +15,20 @@
 from __future__ import annotations
 
 from logging import getLogger
-from typing import Any, Iterable, Iterator, List, Optional, Tuple
+from typing import Any, Iterable, Iterator, List, Optional
+
+from caret_analyze.value_objects.callback import SubscriptionCallbackStructValue
 
 from .struct_interface import (
     CallbacksStructInterface,
     CallbackStructInterface,
     PublisherStructInterface,
     SubscriptionStructInterface,
+    SubscriptionsStructInterface,
 )
-from ..reader_interface import ArchitectureReader
-from ...exceptions import Error
+from ...exceptions import ItemNotFoundError
 from ...value_objects import (
-    NodeValue,
     SubscriptionStructValue,
-    SubscriptionValue,
 )
 
 logger = getLogger(__name__)
@@ -38,14 +38,15 @@ class SubscriptionStruct(SubscriptionStructInterface):
 
     def __init__(
         self,
+        callback_id: Optional[str],
         node_name: str,
         topic_name: str,
-        callback: Optional[CallbackStructInterface] = None,
     ) -> None:
         self._node_name: str = node_name
         self._topic_name: str = topic_name
-        self._callback = callback
+        self._callback_id = callback_id
         self._is_transformed = False
+        self._callback: Optional[CallbackStructInterface] = None
 
     @property
     def node_name(self) -> str:
@@ -59,14 +60,10 @@ class SubscriptionStruct(SubscriptionStructInterface):
     def callback(self) -> Optional[CallbackStructInterface]:
         return self._callback
 
-    @callback.setter
-    def callback(self, callback: CallbackStructInterface) -> None:
-        assert self._is_transformed == False
-        self._callback = callback
-
     def to_value(self) -> SubscriptionStructValue:
         self._is_transformed = True
         callback = None if self.callback is None else self.callback.to_value()
+        assert callback is None or isinstance(callback, SubscriptionCallbackStructValue)
         return SubscriptionStructValue(
             node_name=self.node_name,
             topic_name=self.topic_name,
@@ -78,30 +75,17 @@ class SubscriptionStruct(SubscriptionStructInterface):
             return other.topic_name == self.topic_name
         return False
 
-    @staticmethod
-    def create_instance(
-        callbacks: CallbacksStructInterface,
-        subscription_value: SubscriptionValue,
-    ) -> SubscriptionStruct:
-        sub = SubscriptionStruct(subscription_value.node_name, subscription_value.topic_name)
-
-        if subscription_value.callback_id is not None:
-            callback = callbacks.get_callback(subscription_value.callback_id)
-            sub.callback = callback
-
-        return sub
+    def assign_callback(self, callbacks: CallbacksStructInterface) -> None:
+        if self._callback_id is not None:
+            self._callback = callbacks.get_callback(self._callback_id)
 
 
-class SubscriptionsStruct(Iterable):
+class SubscriptionsStruct(SubscriptionsStructInterface, Iterable):
     def __init__(
         self,
     ) -> None:
         self._data: List[SubscriptionStruct] = []
         self._is_transformed = False
-
-    def to_value(self) -> Tuple[SubscriptionStructValue, ...]:
-        self._is_transformed = True
-        return tuple(subscription.to_value() for subscription in self)
 
     def __iter__(self) -> Iterator[SubscriptionStruct]:
         return iter(self._data)
@@ -110,27 +94,16 @@ class SubscriptionsStruct(Iterable):
         assert self._is_transformed is False
         self._data.append(subscription)
 
-    def as_list(self) -> List[SubscriptionStruct]:
-        return list(self._data)
-
-    def get(self, node_name: str, topic_name: str) -> Optional[SubscriptionStruct]:
+    def get(
+        self,
+        node_name: str,
+        topic_name: str,
+    ) -> SubscriptionStructInterface:
         for subscription in self:
             if subscription.node_name == node_name and subscription.topic_name == topic_name:
                 return subscription
-        return None
+        raise ItemNotFoundError('')
 
-    @staticmethod
-    def create_from_reader(
-        reader: ArchitectureReader,
-        callbacks_loaded: CallbacksStructInterface,
-        node: NodeValue
-    ) -> SubscriptionsStruct:
-        subscriptions = SubscriptionsStruct()
-        subscription_values = reader.get_subscriptions(node.node_name)
-        for sub_value in subscription_values:
-            try:
-                sub = SubscriptionStruct.create_instance(callbacks_loaded, sub_value)
-                subscriptions.add(sub)
-            except Error as e:
-                logger.warning(e)
-        return subscriptions
+    def assign_callbacks(self, callbacks: CallbacksStructInterface):
+        for sub in self:
+            sub.assign_callback(callbacks)

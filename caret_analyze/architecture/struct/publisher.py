@@ -7,11 +7,16 @@ from typing import (
     Iterator,
     List,
     Optional,
-    Tuple,
+    Sequence,
 )
 
-from .struct_interface import CallbacksStructInterface, PublisherStructInterface, SubscriptionStructInterface
-from ..reader_interface import ArchitectureReader, UNDEFINED_STR
+from .struct_interface import (
+    CallbacksStructInterface,
+    PublisherStructInterface,
+    PublishersStructInterface,
+    SubscriptionStructInterface,
+)
+from ..reader_interface import ArchitectureReader
 from ...common import Util
 from ...exceptions import Error
 from ...value_objects import (
@@ -27,13 +32,14 @@ class PublisherStruct(PublisherStructInterface):
 
     def __init__(
         self,
-        node_name: Optional[str] = None,
-        topic_name: Optional[str] = None,
-        callbacks: Optional[CallbacksStructInterface] = None
+        node_name: Optional[str],
+        topic_name: Optional[str],
+        callback_ids: Optional[Sequence[str]],
     ) -> None:
+        self._callback_ids = callback_ids
         self._node_name = node_name
         self._topic_name = topic_name
-        self._callbacks = callbacks
+        self._callbacks: Optional[CallbacksStructInterface] = None
 
     @property
     def node_name(self) -> str:
@@ -54,10 +60,6 @@ class PublisherStruct(PublisherStructInterface):
     def callbacks(self) -> Optional[CallbacksStructInterface]:
         return self._callbacks
 
-    @callbacks.setter
-    def callbacks(self, callbacks: CallbacksStructInterface):
-        self._callbacks = callbacks
-
     def to_value(self) -> PublisherStructValue:
         callback_values = None if self.callbacks is None else self.callbacks.to_value()
         return PublisherStructValue(
@@ -66,16 +68,21 @@ class PublisherStruct(PublisherStructInterface):
             callback_values=callback_values,
         )
 
+    def assign_callbacks(self, callbacks: CallbacksStructInterface) -> None:
+        if self._callback_ids is not None:
+            self._callbacks = callbacks.get_callbacks(*self._callback_ids)
+
     @staticmethod
     def create_instance(
-        callbacks: CallbacksStructInterface,
         publisher_value: PublisherValue,
     ) -> PublisherStruct:
-        publisher = PublisherStruct()
+        publisher = PublisherStruct(publisher_value.node_name,
+                                    publisher_value.topic_name,
+                                    publisher_value.callback_ids)
 
-        if publisher_value.callback_ids is not None:
-            cb_ids = Util.filter_items(lambda x: x != UNDEFINED_STR, publisher_value.callback_ids)
-            publisher.callbacks = callbacks.get_callbacks(*cb_ids)
+        # if publisher_value.callback_ids is not None:
+        #     cb_ids = Util.filter_items(lambda x: x is not None, publisher_value.callback_ids)
+        #     publisher.callbacks = callbacks.get_callbacks(*cb_ids)
 
         # TODO(hsgawa): delete here. and implement other way.
         # callbacks = PublishersStruct._get_callbacks(callbacks)
@@ -91,7 +98,7 @@ class PublisherStruct(PublisherStructInterface):
         return publisher
 
 
-class PublishersStruct(Iterable):
+class PublishersStruct(PublishersStructInterface, Iterable):
 
     def __init__(
         self,
@@ -123,22 +130,19 @@ class PublishersStruct(Iterable):
     #     callbacks = callbacks_loaded.data
     #     return Util.filter_items(is_user_defined, callbacks)
 
-    def to_value(self) -> Tuple[PublisherStructValue, ...]:
-        return tuple(_.to_value() for _ in self._data)
-
     def insert(
         self,
         publisher: PublisherStruct
     ) -> None:
         self._data.append(publisher)
 
-    def as_list(self) -> List[PublisherStruct]:
-        return self._data
+    def assign_callbacks(self, callbacks: CallbacksStructInterface) -> None:
+        for publisher in self._data:
+            publisher.assign_callbacks(callbacks)
 
     @staticmethod
     def create_from_reader(
         reader: ArchitectureReader,
-        callbacks: CallbacksStructInterface,
         node: NodeValue,
     ) -> PublishersStruct:
         publishers = PublishersStruct()
@@ -148,13 +152,14 @@ class PublishersStruct(Iterable):
                 if publisher_value.topic_name == '/tf':
                     continue
 
-                pub_callbacks = None
+                callback_ids = None
                 if publisher_value.callback_ids is not None:
-                    pub_callbacks = callbacks.get_callbacks(*publisher_value.callback_ids)
+                    callback_ids = list(publisher_value.callback_ids)
+
                 pub = PublisherStruct(
+                    callback_ids=callback_ids,
                     node_name=publisher_value.node_name,
                     topic_name=publisher_value.topic_name,
-                    callbacks=pub_callbacks
                 )
                 publishers.insert(pub)
             except Error as e:

@@ -27,9 +27,10 @@ from ..value_objects import (
     Qos,
     SubscriptionStructValue,
     TimerStructValue,
+    TransformCommunicationStructValue,
     TransformFrameBroadcasterStructValue,
     TransformFrameBufferStructValue,
-    TransformCommunicationStructValue,
+    TransformValue,
     VariablePassingStructValue,
 )
 
@@ -137,6 +138,7 @@ class RecordsProvider(metaclass=ABCMeta):
     def tf_set_records(
         self,
         buffer: TransformFrameBufferStructValue,
+        transform: TransformValue,
     ) -> RecordsInterface:
         pass
 

@@ -201,8 +201,16 @@ class TransformCommunication(PathBase):
         return self._node_buf
 
     @property
+    def lookup_node_name(self) -> str:
+        return self._node_buf.node_name
+
+    @property
     def broadcast_node(self) -> Node:
         return self._node_br
+
+    @property
+    def broadcast_node_name(self) -> str:
+        return self._node_br.node_name
 
     @property
     def column_names(self) -> List[str]:

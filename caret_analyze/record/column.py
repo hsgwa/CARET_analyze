@@ -93,6 +93,20 @@ ColumnAttribute.SEND_MSG = ColumnAttribute('send_msg')
 ColumnAttribute.TAKE_MSG = ColumnAttribute('take_msg')
 
 
+def get_column_name(columns: List[Column], column_name: str) -> str:
+    for c in columns:
+        if c.column_name.endswith(column_name):
+            return c.column_name
+    raise ValueError(f'Column name "{column_name}" not found.')
+
+
+def get_column(columns: List[Column], column_name: str) -> Column:
+    for c in columns:
+        if c.column_name.endswith(column_name):
+            return c
+    raise ValueError(f'Column name "{column_name}" not found.')
+
+
 class Column(ValueObject):
 
     def __init__(
@@ -131,9 +145,12 @@ class Column(ValueObject):
             mapper=deepcopy(self._mapper)
         )
 
-    @property
-    def mapper(self) -> Optional[ColumnMapper]:
-        return self._mapper
+    def get_mapped(self, value: int) -> object:
+        assert self._mapper is not None
+        return self._mapper.get(value)
+
+    def has_mapper(self) -> bool:
+        return self._mapper is not None
 
 
 class UniqueList(UserList):

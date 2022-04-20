@@ -18,9 +18,17 @@ from .transform import (
     TransformFrameBroadcastersStruct,
     TransformFrameBuffersStruct,
 )
+from .timer import (
+    TimerStruct,
+    TimersStruct,
+)
 from .communication import (
     CommunicationsStruct,
     CommunicationStruct
+)
+from .callback import (
+    CallbackStruct,
+    CallbacksStruct,
 )
 from .node import (
     NodesStruct,
@@ -29,9 +37,11 @@ from .node import (
 from .node_path import (
     NodePathStruct,
     NodePathsStruct,
-    NodePathsStructInterface,
 )
+from .callback_group import (CallbackGroupsStruct, CallbackGroupStruct)
 from .path import PathStruct, PathsStruct
+from .variable_passing import VariablePassingsStruct, VariablePassingStruct
+from .struct_interface import NodeInputType, NodeOutputType
 
 __all__ = [
     'CommunicationStruct',
@@ -43,7 +53,14 @@ __all__ = [
     'NodePathStruct',
     'NodePathStruct',
     'NodePathsStruct',
+    'CallbackGroupsStruct',
+    'CallbackGroupStruct',
+    'VariablePassingsStruct',
+    'VariablePassingStruct',
     'NodePathsStructInterface',
+    'NodeInputType',
+    'PublishersStruct',
+    'NodeOutputType',
     'NodeStruct',
     'NodesStruct',
     'Path',
@@ -58,4 +75,8 @@ __all__ = [
     'TransformFrameBroadcastersStruct',
     'TransformFrameBufferStruct',
     'TransformFrameBuffersStruct',
+    'TimerStruct',
+    'TimersStruct',
+    'CallbackStruct',
+    'CallbacksStruct',
 ]

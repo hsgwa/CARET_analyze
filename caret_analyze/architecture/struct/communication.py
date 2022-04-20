@@ -17,22 +17,29 @@ from __future__ import annotations
 from typing import Tuple, List, Union
 from itertools import product
 from logging import getLogger
+from multimethod import multimethod as singledispatchmethod
 
-from caret_analyze.architecture.struct.transform import TransformFrameBroadcasterStruct, TransformFrameBroadcastersStruct, TransformFrameBufferStruct
-
+from .transform import (
+    TransformFrameBroadcasterStruct,
+    TransformFrameBufferStruct,
+)
 from .callback import CallbackStruct
 from .node import NodeStruct, NodesStruct
 from .publisher import PublisherStruct
 from .subscription import SubscriptionStruct
-from ...exceptions import ItemNotFoundError, MultipleItemFoundError
+from ...common import Util
+from ...exceptions import InvalidArgumentError, ItemNotFoundError
 from ...common import Progress
 from ...value_objects import (
     CommunicationStructValue,
     TransformCommunicationStructValue,
+    NodePathValue,
 )
 
 
 logger = getLogger(__name__)
+
+CommunicationType = Union[CommunicationStructValue, TransformCommunicationStructValue]
 
 
 class CommunicationStruct():
@@ -45,48 +52,10 @@ class CommunicationStruct():
         node_pub: NodeStruct,
         node_sub: NodeStruct,
     ) -> None:
-        from ...common import Util
-
         self._sub = sub
         self._pub = pub
         self._node_pub = node_pub
         self._node_sub = node_sub
-
-        self._callback_pub = None
-        self._callback_sub = None
-        # try:
-        #     callbacks_pub = None
-        #     is_target_pub_cb = CommunicationsStruct.IsTargetPubCallback(pub)
-        #     callbacks = nodes.get_node(pub.node_name).callbacks
-        #     callbacks_pub = Util.filter_items(is_target_pub_cb, callbacks)
-        # except ItemNotFoundError:
-        #     logger.info(f'Failed to find publisher callback. {node_pub}. Skip loading')
-        # except MultipleItemFoundError:
-        #     msg = 'Failed to identify subscription. Several candidates were found. Skip loading.'
-        #     msg += f'node_name: {node_sub.node_name}, '
-        #     msg += f'topic_name: {sub.topic_name}'
-        #     logger.warning(msg)
-
-        # try:
-        #     callback_sub = None
-        #     is_target_sub_cb = CommunicationsStruct.IsTargetSubCallback(sub)
-        #     callback_values = nodes.get_node(sub.node_name).callbacks
-        #     callback_sub = Util.find_one(is_target_sub_cb, callback_values)
-        # except ItemNotFoundError:
-        #     logger.info(f'Failed to find publisher callback. {node_sub}. Skip loading')
-        # except MultipleItemFoundError:
-        #     msg = 'Failed to identify subscription. Several candidates were found. Skip loading.'
-        #     msg += f'node_name: {node_sub.node_name}, '
-        #     msg += f'topic_name: {sub.topic_name}'
-        #     logger.warning(msg)
-
-    @property
-    def callback_sub(self) -> None:
-        return self._callback_sub
-
-    @property
-    def callbacks_pub(self) -> None:
-        return self._callback_pub
 
     @property
     def node_pub(self) -> NodeStruct:
@@ -101,20 +70,28 @@ class CommunicationStruct():
         return self._pub
 
     @property
+    def publish_node_name(self) -> str:
+        return self.node_pub.node_name
+
+    @property
     def subscription(self) -> SubscriptionStruct:
         return self._sub
 
+    @property
+    def subscribe_node_name(self) -> str:
+        return self.node_sub.node_name
+
+    @property
+    def topic_name(self) -> str:
+        return self._pub.topic_name
+
     def to_value(self) -> Union[CommunicationStructValue, TransformCommunicationStructValue]:
-        callbacks_pub = None if self.callbacks_pub is None else self.callbacks_pub.to_value()
-        callback_sub = None if self.callback_sub is None else self.callback_sub.to_value()
 
         return CommunicationStructValue(
             self.node_pub.to_value(),
             self.node_sub.to_value(),
             self.publisher.to_value(),
-            self.subscription.to_value(),
-            callbacks_pub,
-            callback_sub)
+            self.subscription.to_value())
 
 
 class TransformCommunicationStruct():
@@ -165,14 +142,15 @@ class CommunicationsStruct():
                 elif isinstance(node_input, SubscriptionStruct) and \
                         isinstance(node_output, PublisherStruct):
                     comm = CommunicationStruct(
-                        nodes,
-                        node_output,
-                        node_input,
-                        node_recv,
-                        node_send,
+                        nodes=nodes,
+                        pub=node_output,
+                        sub=node_input,
+                        node_pub=node_send,
+                        node_sub=node_recv
                     )
                 else:
-                    NotImplementedError(f'Unsupported communication: {node_input} -> {node_output}')
+                    NotImplementedError(
+                        f'Unsupported communication: {node_input} -> {node_output}')
                 data.append(comm)
 
         self._data = data
@@ -180,18 +158,56 @@ class CommunicationsStruct():
     def to_value(self) -> Tuple[CommunicationStructValue, ...]:
         return tuple(_.to_value() for _ in self._data)
 
-    def find_communication(
+    @singledispatchmethod
+    def get(self, arg):
+        raise InvalidArgumentError('')
+
+    @get.register
+    def _get_node_paths(
+        self,
+        node_path_send: NodePathValue,
+        node_path_recv: NodePathValue
+    ) -> Union[CommunicationStruct, TransformCommunicationStruct]:
+        topic_name = node_path_recv.subscribe_topic_name
+        topic_name = topic_name or node_path_send.publish_topic_name
+
+        assert topic_name is not None
+
+        if topic_name == '/tf':
+            assert node_path_send.broadcast_frame_id is not None
+            assert node_path_send.broadcast_child_frame_id is not None
+            assert node_path_recv.buffer_lookup_frame_id is not None
+            assert node_path_recv.buffer_lookup_child_frame_id is not None
+
+            return self._get_tf_comm_dict(
+                node_path_send.node_name,
+                node_path_recv.node_name,
+                node_path_send.broadcast_frame_id,
+                node_path_send.broadcast_child_frame_id,
+                node_path_recv.buffer_lookup_frame_id,
+                node_path_recv.buffer_lookup_child_frame_id,
+            )
+
+        return self._get_comm_dict(
+            topic_name,
+            node_path_send.node_name,
+            node_path_recv.node_name
+        )
+
+    @get.register
+    def _get_comm_dict(
         self,
         topic_name: str,
         publish_node_name: str,
         subscribe_node_name: str,
     ) -> CommunicationStruct:
-        from ...common import Util
+        def is_target(comm: CommunicationType) -> bool:
+            if isinstance(comm, CommunicationStruct):
+                return comm.publish_node_name == publish_node_name and \
+                    comm.subscribe_node_name == subscribe_node_name and \
+                    comm.topic_name == topic_name
 
-        def is_target(comm: CommunicationStruct):
-            return comm.publish_node_name == publish_node_name and \
-                comm.subscribe_node_name == subscribe_node_name and \
-                comm.topic_name == topic_name
+            return False
         try:
             return Util.find_one(is_target, self._data)
         except ItemNotFoundError:
@@ -199,6 +215,39 @@ class CommunicationsStruct():
             msg += f'topic_name: {topic_name}, '
             msg += f'publish_node_name: {publish_node_name}, '
             msg += f'subscribe_node_name: {subscribe_node_name}, '
+
+            raise ItemNotFoundError(msg)
+
+    @get.register
+    def _get_tf_comm_dict(
+        self,
+        broadcast_node_name: str,
+        lookup_node_name: str,
+        broadcast_frame_id: str,
+        broadcast_child_frame_id: str,
+        lookup_frame_id: str,
+        lookup_child_frame_id: str,
+    ) -> TransformCommunicationStruct:
+        def is_target(comm: CommunicationType) -> bool:
+            if isinstance(comm, TransformCommunicationStruct):
+                return comm.broadcaster.node_name == broadcast_node_name and \
+                    comm.buffer.lookup_node_name == lookup_node_name and \
+                    comm.broadcaster.frame_id == broadcast_frame_id and \
+                    comm.broadcaster.child_frame_id == broadcast_child_frame_id and \
+                    comm.buffer.lookup_frame_id == lookup_frame_id and \
+                    comm.buffer.lookup_child_frame_id == lookup_child_frame_id
+            return False
+
+        try:
+            return Util.find_one(is_target, self._data)
+        except ItemNotFoundError:
+            msg = 'Failed to find communication. '
+            msg += f'broadcast_node_name: {broadcast_node_name}, '
+            msg += f'lookup_node_name: {lookup_node_name}, '
+            msg += f'broadcast_frame_id: {broadcast_frame_id}, '
+            msg += f'broadcast_child_frame_id: {broadcast_child_frame_id}, '
+            msg += f'lookup_frame_id: {lookup_frame_id}, '
+            msg += f'lookup_child_frame_id: {lookup_child_frame_id}, '
 
             raise ItemNotFoundError(msg)
 

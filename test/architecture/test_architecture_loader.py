@@ -260,8 +260,8 @@
 #         path_ = mocker.Mock(spec=NodePathStructValue)
 #         context = {
 #             'context_type': MessageContextType.CALLBACK_CHAIN.type_name,
-#             'publisher_topic_name': 'UNDEFINED',
-#             'subscription_topic_name': 'UNDEFINED',
+#             'publisher_topic_name': 'None',
+#             'subscription_topic_name': 'None',
 #         }
 
 #         mocker.patch.object(cbg, 'callbacks', (callback,))

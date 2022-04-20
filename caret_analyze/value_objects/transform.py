@@ -15,14 +15,15 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from itertools import groupby
+from multimethod import multimethod as singledispatchmethod
+from itertools import groupby, product
 
 from typing import Optional, Sequence, Set, Tuple
 
 from .publisher import PublisherStructValue, PublisherValue
 from .value_object import ValueObject
 from ..common.util import Util
-from ..exceptions import ItemNotFoundError
+from ..exceptions import ItemNotFoundError, InvalidArgumentError
 
 
 class TransformValue(ValueObject):
@@ -53,16 +54,16 @@ class TransformBroadcasterValue(ValueObject):
     def __init__(
         self,
         pub: PublisherValue,
-        transforms: Tuple[TransformValue, ...],
+        broadcast_transforms: Tuple[TransformValue, ...],
         callback_ids: Optional[Tuple[str, ...]],
     ) -> None:
         self._pub = pub
-        self._transforms = transforms
+        self._send_transforms = broadcast_transforms
         self._callback_ids = callback_ids
 
     @property
-    def transforms(self) -> Sequence[TransformValue]:
-        return self._transforms
+    def broadcast_transforms(self) -> Sequence[TransformValue]:
+        return self._send_transforms
 
     @property
     def publisher(self) -> PublisherValue:
@@ -173,13 +174,15 @@ class TransformBufferValue(ValueObject):
         lookup_node_id: str,
         listener_node_name: Optional[str],
         listener_node_id: Optional[str],
-        lookup_transforms: Optional[Tuple[TransformValue, ...]]
+        lookup_transforms: Optional[Tuple[TransformValue, ...]],
+        listen_transforms: Optional[Tuple[TransformValue, ...]]
     ) -> None:
         self._listener_node_name = listener_node_name
         self._listener_node_id = listener_node_id
         self._lookup_node_name = lookup_node_name
         self._lookup_node_id = lookup_node_id
-        self._transforms = lookup_transforms
+        self._lookup_transforms = lookup_transforms
+        self._listen_transforms = listen_transforms
 
     @property
     def lookup_node_id(self) -> str:
@@ -199,7 +202,11 @@ class TransformBufferValue(ValueObject):
 
     @property
     def lookup_transforms(self) -> Optional[Tuple[TransformValue, ...]]:
-        return self._transforms
+        return self._lookup_transforms
+
+    @property
+    def listen_transforms(self) -> Optional[Tuple[TransformValue, ...]]:
+        return self._listen_transforms
 
 
 class TransformBufferStructValue(ValueObject):
@@ -208,20 +215,26 @@ class TransformBufferStructValue(ValueObject):
         lookup_node_name: str,
         listener_node_name: Optional[str],
         lookup_transforms: Tuple[TransformValue, ...],
+        listen_transforms: Tuple[TransformValue, ...]
     ) -> None:
         self._lookup_node_name = lookup_node_name
         self._listener_node_name = listener_node_name
         self._lookup_transforms = lookup_transforms
+        self._listen_transforms = listen_transforms
         self._frame_buffers: Optional[Tuple[TransformFrameBufferStructValue, ...]] = None
-        if lookup_transforms is not None:
-            frame_buffers = []
-            for transform in lookup_transforms or []:
-                frame_buffers.append(TransformFrameBufferStructValue(
-                    lookup_node_name,
-                    listener_node_name,
-                    transform
-                ))
-            self._frame_buffers = tuple(frame_buffers)
+        tf_tree = TransformTreeValue.create_from_transforms(listen_transforms)
+        frame_buffers = []
+        for listen_transform, lookup_transform in product(listen_transforms, lookup_transforms):
+            if tf_tree.is_in(lookup_transform, listen_transform):
+                frame_buffers.append(
+                    TransformFrameBufferStructValue(
+                        lookup_node_name,
+                        listener_node_name,
+                        listen_transform,
+                        lookup_transform,
+                    )
+                )
+        self._frame_buffers = tuple(frame_buffers)
 
     @property
     def listener_node_name(self) -> Optional[str]:
@@ -236,8 +249,45 @@ class TransformBufferStructValue(ValueObject):
         return self._lookup_transforms
 
     @property
+    def listen_transforms(self) -> Tuple[TransformValue, ...]:
+        return self._listen_transforms
+
+    @property
     def frame_buffers(self) -> Optional[Tuple[TransformFrameBufferStructValue, ...]]:
         return self._frame_buffers
+
+    @singledispatchmethod
+    def get_frame_buffer(self, arg) -> TransformFrameBroadcasterStructValue:
+        raise InvalidArgumentError('')
+
+    @get_frame_buffer.register
+    def _get_frame_buffer_tf_value(
+        self,
+        listen_transform: TransformValue,
+        lookup_transform: TransformValue
+    ) -> TransformFrameBufferStructValue:
+        return self._get_frame_buffer_dict(
+            listen_transform.frame_id,
+            listen_transform.child_frame_id,
+            lookup_transform.frame_id,
+            lookup_transform.child_frame_id
+        )
+
+    @get_frame_buffer.register
+    def _get_frame_buffer_dict(
+        self,
+        listen_frame_id: str,
+        listen_child_frame_id: str,
+        lookup_frame_id: str,
+        lookup_child_frame_id: str
+    ) -> TransformFrameBufferStructValue:
+        for buff in self.frame_buffers or []:
+            if buff.listen_frame_id == listen_frame_id and \
+                    buff.listen_child_frame_id == listen_child_frame_id and \
+                    buff.lookup_frame_id == lookup_frame_id and \
+                    buff.lookup_child_frame_id == lookup_child_frame_id:
+                return buff
+        raise ItemNotFoundError('')
 
 
 class TransformFrameBufferStructValue(ValueObject):
@@ -245,27 +295,41 @@ class TransformFrameBufferStructValue(ValueObject):
         self,
         lookup_node_name: str,
         listener_node_name: Optional[str],
-        transform: TransformValue
+        listen_transform: TransformValue,
+        lookup_transform: TransformValue
     ) -> None:
         self._lookup_node_name = lookup_node_name
         self._listener_node_name = listener_node_name
-        self._transform = transform
+        self._listen_transform = listen_transform
+        self._lookup_transform = lookup_transform
 
     @property
     def lookup_node_name(self) -> str:
         return self._lookup_node_name
 
     @property
-    def transform(self) -> TransformValue:
-        return self._transform
+    def lookup_transform(self) -> TransformValue:
+        return self._lookup_transform
 
     @property
-    def frame_id(self) -> str:
-        return self._transform.frame_id
+    def lookup_frame_id(self) -> str:
+        return self._lookup_transform.frame_id
 
     @property
-    def child_frame_id(self) -> str:
-        return self._transform.child_frame_id
+    def lookup_child_frame_id(self) -> str:
+        return self._lookup_transform.child_frame_id
+
+    @property
+    def listen_transform(self) -> TransformValue:
+        return self._listen_transform
+
+    @property
+    def listen_frame_id(self) -> str:
+        return self._listen_transform.frame_id
+
+    @property
+    def listen_child_frame_id(self) -> str:
+        return self._listen_transform.child_frame_id
 
     @property
     def listener_node_name(self) -> Optional[str]:
@@ -282,13 +346,16 @@ class TransformCommunicationStructValue():
         broadcaster: TransformFrameBroadcasterStructValue,
         buffer: TransformFrameBufferStructValue,
     ) -> None:
-        self._transform = broadcaster.transform
         self._broadcaster = broadcaster
         self._buffer = buffer
 
     @property
-    def node_name(self) -> str:
-        return self._broadcaster.publisher.node_name
+    def broadcast_node_name(self) -> str:
+        return self._broadcaster.node_name
+
+    @property
+    def lookup_node_name(self) -> str:
+        return self._buffer.lookup_node_name
 
     @property
     def broadcaster(self) -> TransformFrameBroadcasterStructValue:
@@ -303,16 +370,32 @@ class TransformCommunicationStructValue():
         return self._broadcaster.topic_name
 
     @property
-    def transform(self) -> TransformValue:
-        return self._transform
+    def lookup_transform(self) -> TransformValue:
+        return self.buffer.lookup_transform
 
     @property
-    def frame_id(self) -> str:
-        return self._transform.frame_id
+    def listen_transform(self) -> TransformValue:
+        return self.buffer.listen_transform
 
     @property
-    def child_frame_id(self) -> str:
-        return self._transform.child_frame_id
+    def lookup_frame_id(self) -> str:
+        return self.lookup_transform.frame_id
+
+    @property
+    def lookup_child_frame_id(self) -> str:
+        return self.lookup_transform.child_frame_id
+
+    @property
+    def broadcast_transform(self) -> TransformValue:
+        return self.broadcaster.transform
+
+    @property
+    def broadcast_frame_id(self) -> str:
+        return self.broadcaster.transform.frame_id
+
+    @property
+    def broadcast_child_frame_id(self) -> str:
+        return self.broadcaster.transform.child_frame_id
 
 
 class TransformTreeValue():

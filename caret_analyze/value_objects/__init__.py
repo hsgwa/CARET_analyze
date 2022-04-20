@@ -14,14 +14,12 @@
 
 from .callback import (CallbackStructValue,
                        CallbackType,
-                       CallbackStructValue,
                        CallbackValue,
                        SubscriptionCallbackStructValue,
                        SubscriptionCallbackValue,
                        TimerCallbackStructValue, TimerCallbackValue)
 from .callback_group import CallbackGroupStructValue, CallbackGroupType, CallbackGroupValue
-from .communication import (CommunicationStructValue,
-                            CommunicationStructValueBase)
+from .communication import (CommunicationStructValue,)
 from .executor import ExecutorStructValue, ExecutorType, ExecutorValue
 from .message_context import (CallbackChain,
                               InheritUniqueStamp,
@@ -47,6 +45,7 @@ from .transform import (
     TransformFrameBroadcasterStructValue,
     TransformFrameBufferStructValue,
     TransformValue,
+    TransformTreeValue,
 )
 from .value_object import ValueObject
 from .variable_passing import VariablePassingStructValue, VariablePassingValue
@@ -62,7 +61,6 @@ __all__ = [
     'CallbackValue',
     'CallbackStruct',
     'CommunicationStructValue',
-    'CommunicationStructValueBase',
     'ExecutorStructValue',
     'ExecutorType',
     'ExecutorValue',
@@ -90,6 +88,7 @@ __all__ = [
     'TransformBroadcasterStructValue',
     'TransformCommunicationStructValue',
     'TransformStructValue',
+    'TransformTreeValue',
     'TransformValue',
     'TransformBroadcasterValue',
     'TransformBufferStructValue',

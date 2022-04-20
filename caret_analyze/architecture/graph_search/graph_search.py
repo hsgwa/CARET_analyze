@@ -295,6 +295,3 @@ class Graph:
 
             paths.append(path)
         return paths
-
-
-
