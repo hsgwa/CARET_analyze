@@ -27,6 +27,7 @@ class Publisher(PathBase, Summarizable):
         publisher: PublisherStructValue,
         provider: Union[RecordsProvider, RuntimeDataProvider],
     ) -> None:
+        super().__init__()
         self.__publisher = publisher
         self._val = publisher
         self._provider = provider

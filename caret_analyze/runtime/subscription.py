@@ -26,6 +26,7 @@ class Subscription(PathBase, Summarizable):
         self, val: SubscriptionStructValue,
         data_provider: Union[RecordsProvider, RuntimeDataProvider]
     ) -> None:
+        super().__init__()
         self._val = val
         self._provider = data_provider
 
