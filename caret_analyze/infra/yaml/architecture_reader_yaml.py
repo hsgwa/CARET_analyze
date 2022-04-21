@@ -375,8 +375,8 @@ class ArchitectureReaderYaml(ArchitectureReader):
 
         for val in callback_dicts:
             callback_name = val.get_value('callback_name')
-            publish_topic_names = self._get_publish_topic_names(node.node_name, callback_name)
             callback_id = val.get_value('callback_id')
+            publish_topic_names = self._get_publish_topic_names(node.node_name, callback_id)
             callbacks.append(
                 SubscriptionCallbackValue(
                     callback_id=callback_id,

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from __future__ import annotations
+from multimethod import multimethod as singledispatchmethod
 
 from logging import getLogger
 from typing import (
@@ -193,12 +194,24 @@ class NodeStruct(NodeStructInterface):
     def node_paths(self, node_paths: NodePathsStruct):
         self._node_paths = node_paths
 
-    def get_node_path(
+    @singledispatchmethod
+    def get_node_path(self, arg) -> NodePathStructValue:
+        raise NotImplementedError('')
+
+    @get_node_path.register
+    def _get_node_path_value(
         self,
         node_path: NodePathValue
     ) -> NodePathStructValue:
-        assert self._node_paths is not None
-        return self._node_paths._get_node_path(node_path)
+        return self.node_paths.get(node_path)
+
+    @get_node_path.register
+    def _get_node_path_node_io(
+        self,
+        node_input: NodeInputType,
+        node_output: NodeOutputType
+    ) -> NodePathStructValue:
+        return self.node_paths.get(node_input, node_output)
 
     @property
     def timers(self) -> TimersStruct:

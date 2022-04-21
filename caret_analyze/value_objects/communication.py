@@ -75,6 +75,7 @@ class CommunicationStructValue(ValueObject):
 
     @property
     def subscription_callback(self) -> CallbackStructValue:
+        assert self._subscription_value.callback is not None
         return self._subscription_value.callback
 
     @property

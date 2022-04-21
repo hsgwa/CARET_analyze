@@ -14,8 +14,6 @@
 
 from typing import List, Optional
 
-from caret_analyze.value_objects.transform import TransformBroadcasterStructValue
-
 from .callback import CallbackBase
 from .path_base import PathBase
 from .publisher import Publisher

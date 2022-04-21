@@ -1,3 +1,17 @@
+# Copyright 2021 Research Institute of Systems Planning, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from __future__ import annotations
 
 from logging import getLogger
@@ -19,6 +33,7 @@ from .struct_interface import (
     TransformFrameBufferStructInterface,
 )
 from .subscription import SubscriptionStruct
+from .callback_path import CallbackPathStruct
 from .transform import TransformFrameBroadcasterStruct, TransformFrameBufferStruct
 from .variable_passing import VariablePassingStruct
 from ..reader_interface import ArchitectureReader
@@ -41,13 +56,13 @@ class NodePathStruct(NodePathStructInterface):
         node_name: str,
         node_input: Optional[NodeInputType],
         node_output: Optional[NodeOutputType],
-        child: Optional[List[Union[CallbackStructInterface, VariablePassingStruct]]] = None,
+        callback_path: Optional[CallbackPathStruct] = None,
         message_context: Optional[MessageContext] = None,
     ) -> None:
         self._node_name = node_name
         self._node_input = node_input
         self._node_output = node_output
-        self._child = child
+        self._callback_path = callback_path
         self._message_context = message_context
 
     @property
@@ -93,9 +108,8 @@ class NodePathStruct(NodePathStructInterface):
         tf_frame_buffer = None if self.tf_frame_buffer is None else self.tf_frame_buffer.to_value()
         tf_frame_br = None if self.tf_frame_broadcaster is None \
             else self.tf_frame_broadcaster.to_value()
-        child = None if self.child is None else tuple(
-            _.to_value() for _ in self.child)
         msg_contxt = self.message_context
+        child = self.callback_path.to_value() if self.callback_path is not None else None
 
         return NodePathStructValue(
             node_name=self.node_name,
@@ -137,12 +151,16 @@ class NodePathStruct(NodePathStructInterface):
         self._message_context = message_context
 
     @property
-    def child(self) -> Optional[List[Union[CallbackStructInterface, VariablePassingStruct]]]:
-        return self._child
+    def child(self) -> Optional[CallbackPathStruct]:
+        return self.callback_path
 
-    @child.setter
-    def child(self, child: List[Union[CallbackStructInterface, VariablePassingStruct]]):
-        self._child = child
+    @property
+    def callback_path(self) -> Optional[CallbackPathStruct]:
+        return self._callback_path
+
+    @callback_path.setter
+    def callback_path(self, callback_path: CallbackPathStruct) -> None:
+        self._callback_path = callback_path
 
     # def __eq__(self, __o: object) -> bool:
     #     if isinstance(__o, NodePathStruct):

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from __future__ import annotations
+from asyncio.log import logger
 
 from typing import List, Optional, Tuple, Union
 from multimethod import multimethod as singledispatchmethod
@@ -37,7 +38,7 @@ from .transform import (
 from .variable_passing import VariablePassing
 from ..architecture import Architecture
 from ..common import Util
-from ..exceptions import (InvalidArgumentError, ItemNotFoundError, MultipleItemFoundError,
+from ..exceptions import (InvalidArgumentError, ItemNotFoundError,
                           UnsupportedTypeError, Error)
 from ..infra.interface import RecordsProvider, RuntimeDataProvider
 from ..value_objects import (
@@ -751,7 +752,7 @@ class CommunicationsLoaded:
                     raise NotImplementedError('')
                 self._data.append(comm)
             except Error as e:
-                pass
+                logger.warning(e)
 
     @property
     def data(self) -> List[Communication]:

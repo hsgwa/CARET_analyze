@@ -35,6 +35,7 @@ from .publisher import (PublisherStructValue,
 from .qos import Qos
 from .subscription import (SubscriptionStructValue,
                            SubscriptionValue)
+from .callback_path import CallbackPathStructValue, CallbackPathValue
 from .timer import TimerStructValue, TimerValue
 from .transform import (
     TransformBroadcasterStructValue,
@@ -76,6 +77,8 @@ __all__ = [
     'PublisherStructValue',
     'PublisherValue',
     'Qos',
+    'CallbackPathStructValue',
+    'CallbackPathValue',
     'SubscriptionCallbackStructValue',
     'SubscriptionCallbackValue',
     'SubscriptionStructValue',

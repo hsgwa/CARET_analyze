@@ -439,7 +439,6 @@ class RecordsProviderLttng(RuntimeDataProvider):
             join_right_key=None,
             how='left_use_latest'
         )
-        df = records.to_dataframe()
 
         set_records = self.tf_set_records(buffer, buffer.listen_transform)
         records = merge(
@@ -1211,13 +1210,12 @@ class NodeRecordsCallbackChain:
         for chain_element in chain_info[1:]:
             if isinstance(chain_element, CallbackStructValue):
                 records_ = self._provider.callback_records(chain_element)
-                join_key = records_.columns[0]
+                join_key = records_.column_names[0]
                 records = merge(
                     left_records=records,
                     right_records=records_,
                     join_left_key=join_key,
                     join_right_key=join_key,
-                    columns=Columns(records.columns + records_.columns),
                     how='left',
                     progress_label='binding: callback_start and callback end'
                 )
@@ -1226,7 +1224,7 @@ class NodeRecordsCallbackChain:
             if isinstance(chain_element, VariablePassingStructValue):
                 records_ = self._provider.variable_passing_records(chain_element)
                 # self._rename_var_pass_records(records_, chain_element)
-                join_key = records_.columns[0]
+                join_key = records_.column_names[0]
                 records = merge(
                     left_records=records,
                     right_records=records_,

@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from typing import Optional, List, Union
-from itertools import product
 from logging import getLogger
 
 from .graph_search import Graph, GraphNode, GraphPath
@@ -21,11 +20,11 @@ from ..struct.struct_interface import (
     CallbackStructInterface,
     NodeInputType,
     NodeOutputType,
-    NodePathStructInterface,
     NodePathsStructInterface,
     NodeStructInterface,
     VariablePassingStructInterface,
 )
+from ..struct.callback_path import CallbackPathStruct
 from ...common import Util
 from ...exceptions import InvalidArgumentError, ItemNotFoundError
 
@@ -74,33 +73,35 @@ class CallbackPathSearcher:
         self,
         start_callback: CallbackStructInterface,
         end_callback: CallbackStructInterface,
-    ) -> None:
+    ) -> List[CallbackPathStruct]:
         start_name = self._to_node_point_name(start_callback.callback_name, 'read')
         end_name = self._to_node_point_name(end_callback.callback_name, 'write')
 
         graph_paths = self._graph.search_paths(GraphNode(start_name), GraphNode(end_name))
 
+        paths: List[CallbackPathStruct] = []
         for graph_path in graph_paths:
             in_values = start_callback.node_inputs
             out_values = end_callback.node_outputs or []
 
-            if (out_values is None or out_values == ()) and in_values is not None:
+            if (out_values is None or len(out_values) == 0) and in_values is not None:
                 for in_value in in_values:
-                    self._to_path(graph_path, in_value, None)
+                    paths.append(self._to_path(graph_path, in_value, None))
 
             for out_value in out_values:
                 if in_values is None:
-                    self._to_path(graph_path, None, out_value)
+                    paths.append(self._to_path(graph_path, None, out_value))
                 else:
                     for in_value in in_values:
-                        self._to_path(graph_path, in_value, out_value)
+                        paths.append(self._to_path(graph_path, in_value, out_value))
+        return paths
 
     def _to_path(
         self,
         callbacks_graph_path: GraphPath,
         node_in_value: Optional[NodeInputType],
         node_out_value: Optional[NodeOutputType],
-    ) -> NodePathStructInterface:
+    ) -> CallbackPathStruct:
         child: List[Union[CallbackStructInterface, VariablePassingStructInterface]] = []
 
         graph_nodes = callbacks_graph_path.nodes
@@ -109,6 +110,8 @@ class CallbackPathSearcher:
         for graph_node_from, graph_node_to in zip(graph_node_names[:-1], graph_node_names[1:]):
             cb_or_varpass = self._find_cb_or_varpass(graph_node_from, graph_node_to)
             child.append(cb_or_varpass)
+
+        callback_path = CallbackPathStruct(self._node.node_name, child)
 
         # node_in: Union[None, SubscriptionStructInterface, TransformFrameBufferStructInterface]
         # node_in = None
@@ -146,7 +149,7 @@ class CallbackPathSearcher:
         # tf_buffer: Optional[TransformFrameBufferStructInterface] = None
         # tf_broadcaster: Optional[TransformFrameBroadcasterStructInterface] = None
 
-        node_path = self._paths.get(self._node.node_name, node_in_value, node_out_value)
+        # node_path = self._paths.get(node_in_value, node_out_value)
 
         # if isinstance(node_in_value, SubscriptionStruct):
         #     node_path.subscription = node_in_value
@@ -160,7 +163,7 @@ class CallbackPathSearcher:
 
         # node_path.child = child
 
-        return node_path
+        return callback_path
 
     def _find_cb_or_varpass(
         self,
@@ -229,20 +232,3 @@ class CallbackPathSearcher:
     @staticmethod
     def _point_name_to_read_write_name(point_name: str) -> str:
         return point_name.split('@')[1]
-
-
-class CallbackPathSearch():
-    def __init__(
-        self,
-        node: NodeStructInterface,
-        node_paths: NodePathsStructInterface
-    ) -> None:
-        searcher = CallbackPathSearcher(node, node_paths)
-
-        callbacks = node.callbacks
-
-        if callbacks is None:
-            return None
-
-        for write_callback, read_callback in product(callbacks, callbacks):
-            searcher.search(write_callback, read_callback)

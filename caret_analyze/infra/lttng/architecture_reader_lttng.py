@@ -107,10 +107,9 @@ class ArchitectureReaderLttng(ArchitectureReader):
         tf_br = self.get_tf_broadcaster(node.node_name)
         tf_buff = self.get_tf_buffer(node.node_name)
 
-        tf_frames = self.get_tf_frames()
-        tf_tree = TransformTreeValue.create_from_transforms(tf_frames)
-
         if isinstance(tf_buff, TransformBufferValue) and tf_buff.lookup_transforms is not None:
+            tf_frames = self.get_tf_frames()
+            tf_tree = TransformTreeValue.create_from_transforms(tf_frames)
             for listen_tf, lookup_tf in product(tf_frames, tf_buff.lookup_transforms):
                 if not tf_tree.is_in(lookup_tf, listen_tf):
                     continue

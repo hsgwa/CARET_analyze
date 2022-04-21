@@ -411,6 +411,7 @@ class TransformTreeValue():
     def create_from_transforms(
         transforms: Sequence[TransformValue]
     ) -> TransformTreeValue:
+
         edge_trees = None
         tfs = set(deepcopy(transforms))
 

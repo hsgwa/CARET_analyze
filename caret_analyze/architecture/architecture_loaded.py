@@ -291,9 +291,11 @@ def create_node(node: NodeValue, reader: ArchitectureReader) -> NodeStruct:
     subscriptions = create_subscriptions(reader, node)
 
     transforms = reader.get_tf_frames()
-    tf_tree = TransformTreeValue.create_from_transforms(transforms)
-    node_struct.tf_buffer = create_transform_buffer(reader, tf_tree, node)
-    node_struct.tf_broadcaster = create_transform_broadcaster(reader, tf_tree, node)
+
+    if len(transforms) > 0:
+        tf_tree = TransformTreeValue.create_from_transforms(transforms)
+        node_struct.tf_buffer = create_transform_buffer(reader, tf_tree, node)
+        node_struct.tf_broadcaster = create_transform_broadcaster(reader, tf_tree, node)
 
     # load node
     callbacks = create_callbacks(reader, subscriptions, publishers, node)
@@ -448,6 +450,7 @@ def create_node_paths(
 ) -> NodePathsStruct:
 
     node_paths = NodePathsStruct()
+    node.node_paths = node_paths
 
     for node_input in node.node_inputs:
         node_paths.create(node.node_name, node_input, None)
@@ -476,8 +479,22 @@ def assign_callback_graph_paths(node: NodeStruct, node_paths: NodePathsStruct):
     if callbacks is None:
         return None
 
-    for write_callback, read_callback in product(callbacks, callbacks):
-        searcher.search(write_callback, read_callback)
+    for start_callback, end_callback in product(callbacks, callbacks):
+        cb_paths = searcher.search(start_callback, end_callback)
+        if len(cb_paths) == 0:
+            continue
+        if len(cb_paths) > 1:
+            raise ValueError(f'[callback_chain] {len(cb_paths)} paths found')
+        cb_path = cb_paths[0]
+        node_inputs = start_callback.node_inputs
+        node_outputs = end_callback.node_outputs
+        is_assignable = node_inputs is not None and node_outputs is not None
+        if not is_assignable:
+            continue
+
+        for node_input, node_output in product(node_inputs, node_outputs):
+            node_path = node.get_node_path(node_input, node_output)
+            node_path.callback_path = cb_path
 
 
 def create_message_context(
@@ -486,7 +503,7 @@ def create_message_context(
     node: NodeStruct,
 ) -> None:
 
-    # node_path = node_paths.get(
+    # nodenode__path = node_paths.get(
     #     message_context.subscription_topic_name,
     #     message_context.publisher_topic_name
     # )
