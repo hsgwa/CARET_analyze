@@ -25,6 +25,7 @@ from ...value_objects import (
     PublisherValue,
     SubscriptionCallbackValue,
     SubscriptionValue,
+    ServiceCallbackValue,
     TimerCallbackValue,
     TimerValue,
     VariablePassingValue,
@@ -72,6 +73,12 @@ class ArchitectureReaderLttng(ArchitectureReader):
         node: NodeValue
     ) -> Sequence[SubscriptionCallbackValue]:
         return self._lttng.get_subscription_callbacks(node)
+
+    def get_service_callbacks(
+        self,
+        node: NodeValue
+    ) -> Sequence[ServiceCallbackValue]:
+        return self._lttng.get_service_callbacks(node)
 
     def get_publishers(
         self,

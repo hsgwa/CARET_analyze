@@ -20,6 +20,7 @@ from typing import Dict, Sequence
 from ..value_objects import (CallbackGroupValue, ExecutorValue, NodeValue,
                              NodeValueWithId, PathValue, PublisherValue,
                              SubscriptionCallbackValue, SubscriptionValue,
+                             ServiceCallbackValue,
                              TimerCallbackValue, TimerValue, VariablePassingValue)
 
 UNDEFINED_STR = 'UNDEFINED'
@@ -82,6 +83,27 @@ class ArchitectureReader(metaclass=ABCMeta):
         -------
         Sequence[SubscriptionCallbackInfo]
             subscription callback values
+
+        """
+        pass
+
+    @abstractmethod
+    def get_service_callbacks(
+        self,
+        node: NodeValue
+    ) -> Sequence[ServiceCallbackValue]:
+        """
+        Get service callback values.
+
+        Parameters
+        ----------
+        node : NodeInfo
+            target node
+
+        Returns
+        -------
+        Sequence[ServiceCallbackInfo]
+            service callback values
 
         """
         pass

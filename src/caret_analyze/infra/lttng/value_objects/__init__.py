@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .callback import SubscriptionCallbackValueLttng, TimerCallbackValueLttng
+from .callback import SubscriptionCallbackValueLttng, ServiceCallbackValueLttng, TimerCallbackValueLttng
 from .callback_group import CallbackGroupValueLttng
 from .node import NodeValueLttng
 from .publisher import PublisherValueLttng
@@ -23,6 +23,7 @@ __all__ = [
     'NodeValueLttng',
     'PublisherValueLttng',
     'SubscriptionCallbackValueLttng',
+    'ServiceCallbackValueLttng',
     'TimerCallbackValueLttng',
     'TimerControl',
     'TimerInit',

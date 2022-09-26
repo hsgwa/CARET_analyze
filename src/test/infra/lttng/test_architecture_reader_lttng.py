@@ -20,6 +20,7 @@ from caret_analyze.value_objects import (CallbackGroupValue, ExecutorValue,
                                          NodeValueWithId, PublisherValue,
                                          SubscriptionCallbackValue,
                                          TimerCallbackValue)
+from caret_analyze.value_objects.callback import ServiceCallbackValue
 
 
 class TestArchitectureReaderLttng:
@@ -143,6 +144,41 @@ class TestArchitectureReaderLttng:
             assert sub.node_id == node_id[i]
             assert sub.topic_name == topic[i]
             assert sub.callback_id == callback_id[i]
+
+    def test_get_services(self, mocker):
+        lttng_mock = mocker.Mock(spec=Lttng)
+        mocker.patch('caret_analyze.infra.lttng.lttng.Lttng', return_value=lttng_mock)
+        reader = ArchitectureReaderLttng('trace_dir')
+
+        mocker.patch.object(
+            lttng_mock,
+            'get_service_callbacks',
+            return_value=[])
+        node_ = NodeValueWithId('node_name', 'node_id')
+        assert reader.get_service_callbacks(node_) == []
+
+        node = ['node0', 'node1']
+        node_id = ['node0_id', 'node1_id']
+        service = ['service0', 'service1']
+        symbol = ['symbol0', 'symbol1']
+        callback_id = ['callback0', 'callback1']
+
+        srv_cb_0 = ServiceCallbackValue(
+            callback_id[0], node[0], node_id[0], symbol[0], service[0], None)
+        srv_cb_1 = ServiceCallbackValue(
+            callback_id[1], node[1], node_id[1], symbol[1], service[1], None)
+
+        mocker.patch.object(
+            lttng_mock,
+            'get_service_callbacks',
+            return_value=[srv_cb_0, srv_cb_1])
+
+        srvs = reader.get_service_callbacks(node_)
+        for i, srv in enumerate(srvs):
+            assert srv.node_name == node[i]
+            assert srv.node_id == node_id[i]
+            assert srv.service_name == service[i]
+            assert srv.callback_id == callback_id[i]
 
     def test_get_callback_groups(self, mocker):
         lttng_mock = mocker.Mock(spec=Lttng)

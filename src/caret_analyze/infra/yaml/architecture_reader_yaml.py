@@ -23,6 +23,7 @@ from ...value_objects import (CallbackGroupValue, CallbackType, ExecutorValue,
                               NodePathValue, NodeValue, NodeValueWithId,
                               PathValue, PublisherValue,
                               SubscriptionCallbackValue, SubscriptionValue,
+                              ServiceCallbackValue,
                               TimerCallbackValue, TimerValue, VariablePassingValue)
 
 
@@ -113,6 +114,12 @@ class ArchitectureReaderYaml(ArchitectureReader):
                 )
             )
         return callbacks
+
+    def get_service_callbacks(
+        self,
+        node: NodeValue
+    ) -> Sequence[ServiceCallbackValue]:
+        return []
 
     def get_message_contexts(
         self,

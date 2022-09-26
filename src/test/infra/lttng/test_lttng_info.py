@@ -20,6 +20,7 @@ from caret_analyze.infra.lttng.value_objects import (CallbackGroupValueLttng,
                                                      NodeValueLttng,
                                                      PublisherValueLttng,
                                                      SubscriptionCallbackValueLttng,
+                                                     ServiceCallbackValueLttng,
                                                      TimerCallbackValueLttng)
 from caret_analyze.value_objects import (CallbackGroupType, ExecutorType,
                                          ExecutorValue)
@@ -322,6 +323,67 @@ class TestLttngInfo:
 
         sub_cbs_info = info.get_subscription_callbacks(NodeValue('/', '/'))
         assert sub_cbs_info == []
+
+
+    def test_get_service_callbacks_info(self, mocker):
+
+        node_handle = 1
+        service_handle = 3
+        service_name = 8
+        callback_object = 11
+        callback_group_addr = 14
+        service_handle = 15
+        symbol = 'symbol'
+
+        formatted_mock = mocker.Mock(spec=DataFrameFormatted)
+        mocker.patch('caret_analyze.infra.lttng.lttng_info.DataFrameFormatted',
+                     return_value=formatted_mock)
+
+        service_df = pd.DataFrame.from_dict(
+            [
+                {
+                    'callback_object': callback_object,
+                    'node_handle': node_handle,
+                    'service_handle': service_handle,
+                    'callback_group_addr': callback_group_addr,
+                    'service_name': service_name,
+                    'symbol': symbol,
+                    'callback_id': 'service_callback_0'
+                }
+            ]
+        )
+        mocker.patch.object(formatted_mock, 'service_callbacks_df', service_df)
+
+        node_df = pd.DataFrame.from_dict(
+            [
+                {
+                    'node_id': 'node_id',
+                    'node_handle': node_handle,
+                    'node_name': '/node1'
+                }
+            ]
+        )
+        mocker.patch.object(formatted_mock, 'nodes_df', node_df)
+        data = Ros2DataModel()
+
+        data.finalize()
+        info = LttngInfo(data)
+
+        service_cbs_info = info.get_service_callbacks(NodeValue('/node1', 'node_id'))
+        service_cb_info_expect = ServiceCallbackValueLttng(
+            'service_callback_0',
+            'node_id',
+            '/node1',
+            symbol,
+            service_name,
+            service_handle,
+            None,
+            callback_object=callback_object
+        )
+
+        assert service_cbs_info == [service_cb_info_expect]
+
+        assert info.get_service_callbacks(NodeValue('/', 'id')) == []
 
     def test_get_callback_groups_info(self, mocker):
         node_handle = 3
@@ -811,7 +873,7 @@ class TestDataFrameFormatted:
         assert formatted.timer_controls_df == timer_control_mock
         assert formatted.subscription_callbacks_df == sub_mock
         assert formatted.callback_groups_df == cbg_mock
-        assert formatted.services_df == srv_mock
+        assert formatted.service_callbacks_df == srv_mock
         assert formatted.publishers_df == pub_mock
 
     def test_tilde_subscription(self, mocker):

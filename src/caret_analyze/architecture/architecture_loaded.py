@@ -34,6 +34,7 @@ from ..value_objects import (CallbackChain, CallbackGroupStructValue,
                              PublisherStructValue, PublisherValue,
                              SubscriptionCallbackStructValue,
                              SubscriptionCallbackValue,
+                             ServiceCallbackValue,
                              SubscriptionStructValue, SubscriptionValue,
                              TimerCallbackStructValue, TimerCallbackValue, TimerStructValue,
                              TimerValue, VariablePassingStructValue, VariablePassingValue)
@@ -1308,3 +1309,9 @@ class TopicIgnoredReader(ArchitectureReader):
                 continue
             callbacks.append(subscription_callback)
         return callbacks
+
+    def get_service_callbacks(
+        self,
+        node: NodeValue
+    ) -> Sequence[ServiceCallbackValue]:
+        return self._reader.get_service_callbacks(node)

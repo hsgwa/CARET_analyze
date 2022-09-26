@@ -17,6 +17,8 @@ from .callback import (CallbackStructValue,
                        CallbackValue,
                        SubscriptionCallbackStructValue,
                        SubscriptionCallbackValue,
+                       ServiceCallbackValue,
+                       ServiceCallbackStructValue,
                        TimerCallbackStructValue, TimerCallbackValue)
 from .callback_group import CallbackGroupStructValue, CallbackGroupType, CallbackGroupValue
 from .communication import CommunicationStructValue

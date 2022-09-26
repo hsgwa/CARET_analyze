@@ -26,6 +26,7 @@ class CallbackType(ValueObject):
 
     TIMER: CallbackType
     SUBSCRIPTION: CallbackType
+    SERVICE: CallbackType
 
     def __init__(self, name: str) -> None:
         """
@@ -34,10 +35,10 @@ class CallbackType(ValueObject):
         Parameters
         ----------
         name : str
-            callback type name ['timer_callback', 'subscription_callback']
+            callback type name ['timer_callback', 'subscription_callback', 'service_callback]
 
         """
-        if name not in ['timer_callback', 'subscription_callback']:
+        if name not in ['timer_callback', 'subscription_callback', 'service_callback']:
             raise ValueError(f'Unsupported callback type: {name}')
 
         self._name = name
@@ -61,6 +62,7 @@ class CallbackType(ValueObject):
 
 CallbackType.TIMER = CallbackType('timer_callback')
 CallbackType.SUBSCRIPTION = CallbackType('subscription_callback')
+CallbackType.SERVICE = CallbackType('service_callback')
 
 
 class CallbackValue(ValueObject, metaclass=ABCMeta):
@@ -74,6 +76,7 @@ class CallbackValue(ValueObject, metaclass=ABCMeta):
         symbol: str,
         subscribe_topic_name: Optional[str],
         publish_topic_names: Optional[Tuple[str, ...]],
+        service_name: Optional[str] = None,
         *,  # for yaml reader only.
         callback_name: Optional[str] = None,
     ) -> None:
@@ -393,4 +396,64 @@ class SubscriptionCallbackStructValue(CallbackStructValue, ValueObject):
             'name': self.callback_name,
             'type': self.callback_type_name,
             'topic': self.subscribe_topic_name
+        })
+
+
+class ServiceCallbackValue(CallbackValue):
+
+    def __init__(
+        self,
+        callback_id: str,
+        node_name: str,
+        node_id: str,
+        symbol: str,
+        service_name: str,
+        publish_topic_names: Optional[Tuple[str, ...]],
+        callback_name: Optional[str] = None
+    ) -> None:
+        self.__service_name = service_name
+        super().__init__(
+            callback_id,
+            node_name,
+            node_id,
+            symbol,
+            None,
+            publish_topic_names,
+            service_name,
+            callback_name=callback_name)
+
+    @property
+    def callback_type(self) -> CallbackType:
+        return CallbackType.SERVICE
+
+    @property
+    def service_name(self) -> str:
+        return self.__service_name
+
+
+class ServiceCallbackStructValue(CallbackStructValue, ValueObject):
+    """Structured service callback value."""
+
+    def __init__(
+        self,
+        node_name: str,
+        symbol: str,
+        service_name: str,
+        publish_topic_names: Optional[Tuple[str, ...]],
+        callback_name: str,
+    ) -> None:
+        raise NotImplementedError('')
+        # super().__init__(node_name, symbol, subscribe_topic_name,
+        #                  publish_topic_names, callback_name)
+
+    @property
+    def callback_type(self) -> CallbackType:
+        return CallbackType.SERVICE
+
+    @property
+    def summary(self) -> Summary:
+        return Summary({
+            'name': self.callback_name,
+            'type': self.callback_type_name,
+            'service': self.service_topic_name
         })

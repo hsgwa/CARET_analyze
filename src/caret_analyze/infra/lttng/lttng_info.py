@@ -28,6 +28,7 @@ from .ros2_tracing.data_model import Ros2DataModel
 from .value_objects import (CallbackGroupValueLttng, NodeValueLttng,
                             PublisherValueLttng,
                             SubscriptionCallbackValueLttng,
+                            ServiceCallbackValueLttng,
                             TimerCallbackValueLttng,
                             TimerControl)
 from ...common import Util
@@ -574,6 +575,34 @@ class LttngInfo:
 
         return controls
 
+    def get_service_callbacks(
+        self,
+        node: NodeValue
+    ) -> Sequence[ServiceCallbackValueLttng]:
+        df = self._formatted.service_callbacks_df
+        df = merge(df, self._formatted.nodes_df, 'node_handle')
+
+        service_callbacks: List[ServiceCallbackValueLttng] = []
+        for _, row in df.iterrows():
+            if node.node_id != row['node_id']:
+                continue
+
+            service_callbacks.append(
+                ServiceCallbackValueLttng(
+                    callback_id=row['callback_id'],
+                    node_id=row['node_id'],
+                    node_name=row['node_name'],
+                    symbol=row['symbol'],
+                    publish_topic_names=None,
+                    service_name=row['service_name'],
+                    service_handle=row['service_handle'],
+                    callback_object=row['callback_object'],
+                )
+            )
+
+        return service_callbacks
+
+
 
 # class PublisherBinder:
 #     TARGET_RECORD_MAX_INDEX = 10
@@ -947,6 +976,25 @@ class DataFrameFormatted:
         return self._sub_callbacks_df
 
     @property
+    def service_callbacks_df(self) -> pd.DataFrame:
+        """
+        Build service callback table.
+
+        Returns
+        -------
+        pd.DataFrame
+            columns
+            - callback_object
+            - node_handle
+            - service_handle
+            - callback_group_addr
+            - service_name
+            - symbol
+            - callback_id
+        """
+        return self._srv_callbacks_df
+
+    @property
     def nodes_df(self) -> pd.DataFrame:
         """
         Build node table.
@@ -981,25 +1029,6 @@ class DataFrameFormatted:
 
         """
         return self._pub_df
-
-    @property
-    def services_df(self) -> pd.DataFrame:
-        """
-        Get service info table.
-
-        Returns
-        -------
-        pd.DataFrame
-            Columns
-            - callback_id
-            - callback_object
-            - node_handle
-            - service_handle
-            - service_name
-            - symbol
-
-        """
-        return self._srv_callbacks_df
 
     @property
     def executor_df(self) -> pd.DataFrame:
