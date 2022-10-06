@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from logging import getLogger
+from multimethod import multimethod as singledispatchmethod
 from typing import Collection, Union
 
 from .callback_info import (CallbackFrequencyPlot,
@@ -23,6 +24,7 @@ from .communication_info import (CommunicationFrequencyPlot,
                                  CommunicationLatencyPlot,
                                  CommunicationPeriodPlot)
 from .communication_info_interface import CommunicationTimeSeriesPlot
+from ...exceptions import InvalidArgumentError
 from .pub_sub_info import PubSubFrequencyPlot, PubSubPeriodPlot
 from .pub_sub_info_interface import PubSubTimeSeriesPlot
 from ...runtime import (CallbackBase, Communication, Publisher, Subscription)
@@ -32,8 +34,13 @@ logger = getLogger(__name__)
 
 class Plot:
 
+    @singledispatchmethod
+    def create_callback_frequency_plot(arg) -> TimeSeriesPlot:
+        raise InvalidArgumentError(f'Unknown argument type: {arg}')
+
     @staticmethod
-    def create_callback_frequency_plot(
+    @create_callback_frequency_plot.register
+    def _create_callback_frequency_plot(
         callbacks: Collection[CallbackBase]
     ) -> TimeSeriesPlot:
         """
@@ -49,6 +56,14 @@ class Plot:
 
         """
         return CallbackFrequencyPlot(callbacks)
+
+    @staticmethod
+    @create_callback_frequency_plot.register
+    def _create_callback_frequency_plot_tuple(
+        *callbacks: CallbackBase
+    ) -> TimeSeriesPlot:
+        return CallbackFrequencyPlot(callbacks)
+
 
     @staticmethod
     def create_callback_jitter_plot(
