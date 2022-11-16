@@ -18,13 +18,14 @@ from caret_analyze.architecture.architecture_loaded import (ArchitectureLoaded,
                                                             CallbacksLoaded,
                                                             CommValuesLoaded,
                                                             ExecutorValuesLoaded,
+                                                            FilteredReader,
+                                                            FilteredReaderCondition,
                                                             NodePathCreated,
                                                             NodeValuesLoaded,
                                                             PathValuesLoaded,
                                                             PublishersLoaded,
                                                             SubscriptionsLoaded,
                                                             TimersLoaded,
-                                                            TopicIgnoredReader,
                                                             VariablePassingsLoaded)
 from caret_analyze.architecture.graph_search import CallbackPathSearcher
 from caret_analyze.architecture.reader_interface import ArchitectureReader
@@ -82,7 +83,7 @@ class TestArchitectureLoaded:
         mocker.patch.object(exec_loaded, 'data', [])
         mocker.patch.object(path_loaded, 'data', [])
 
-        arch = ArchitectureLoaded(reader_mock, [])
+        arch = ArchitectureLoaded(reader_mock, [], [])
         assert len(arch.paths) == 0
         assert len(arch.executors) == 0
         assert len(arch.nodes) == 0
@@ -127,9 +128,9 @@ class TestArchitectureLoaded:
         mocker.patch.object(executor_loaded, 'data', (executor_mock,))
         mocker.patch.object(path_loaded, 'data', (path_mock,))
 
-        mocker.patch('caret_analyze.architecture.architecture_loaded.TopicIgnoredReader',
+        mocker.patch('caret_analyze.architecture.architecture_loaded.FilteredReader',
                      return_value=reader_mock)
-        arch = ArchitectureLoaded(reader_mock, [])
+        arch = ArchitectureLoaded(reader_mock, [], [])
         assert len(arch.paths) == 1
         assert len(arch.executors) == 1
         assert len(arch.nodes) == 1
@@ -139,9 +140,9 @@ class TestArchitectureLoaded:
 class TestNodesInfoLoaded():
 
     def test_empty(self, mocker):
-        reader_mock = mocker.Mock(spec=TopicIgnoredReader)
+        reader_mock = mocker.Mock(spec=FilteredReader)
 
-        mocker.patch('caret_analyze.architecture.architecture_loaded.TopicIgnoredReader',
+        mocker.patch('caret_analyze.architecture.architecture_loaded.FilteredReader',
                      return_value=reader_mock)
         mocker.patch.object(
             reader_mock, 'get_subscriptions', return_value=[])
@@ -155,9 +156,9 @@ class TestNodesInfoLoaded():
         assert len(nodes) == 0
 
     def test_single_node(self, mocker):
-        reader_mock = mocker.Mock(spec=TopicIgnoredReader)
+        reader_mock = mocker.Mock(spec=FilteredReader)
 
-        mocker.patch('caret_analyze.architecture.architecture_loaded.TopicIgnoredReader',
+        mocker.patch('caret_analyze.architecture.architecture_loaded.FilteredReader',
                      return_value=reader_mock)
 
         node_mock = mocker.Mock(spec=NodeStruct)
@@ -175,9 +176,9 @@ class TestNodesInfoLoaded():
         assert nodes == (node_mock,)
 
     def test_name_sort(self, mocker):
-        reader_mock = mocker.Mock(spec=TopicIgnoredReader)
+        reader_mock = mocker.Mock(spec=FilteredReader)
 
-        mocker.patch('caret_analyze.architecture.architecture_loaded.TopicIgnoredReader',
+        mocker.patch('caret_analyze.architecture.architecture_loaded.FilteredReader',
                      return_value=reader_mock)
 
         node_a = NodeValue('a', 'a')
@@ -204,9 +205,9 @@ class TestNodesInfoLoaded():
         assert nodes[2].node_name == 'c'
 
     def test_create_node_empty(self, mocker):
-        reader_mock = mocker.Mock(spec=TopicIgnoredReader)
+        reader_mock = mocker.Mock(spec=FilteredReader)
 
-        mocker.patch('caret_analyze.architecture.architecture_loaded.TopicIgnoredReader',
+        mocker.patch('caret_analyze.architecture.architecture_loaded.FilteredReader',
                      return_value=reader_mock)
         mocker.patch.object(
             reader_mock, 'get_subscriptions', return_value=[])
@@ -249,7 +250,7 @@ class TestNodesInfoLoaded():
         assert node.variable_passings == ()
 
     def test_create_node_full(self, mocker):
-        reader_mock = mocker.Mock(spec=TopicIgnoredReader)
+        reader_mock = mocker.Mock(spec=FilteredReader)
         cbg = mocker.Mock(spec=CallbackGroupStruct)
         callback = mocker.Mock(spec=CallbackStruct)
         subscription = mocker.Mock(spec=SubscriptionStruct)
@@ -266,7 +267,7 @@ class TestNodesInfoLoaded():
 
         mocker.patch.object(cbg, 'callbacks', (callback,))
 
-        mocker.patch('caret_analyze.architecture.architecture_loaded.TopicIgnoredReader',
+        mocker.patch('caret_analyze.architecture.architecture_loaded.FilteredReader',
                      return_value=reader_mock)
         mocker.patch.object(
             reader_mock, 'get_subscriptions', return_value=[subscription])
@@ -339,9 +340,9 @@ class TestNodesInfoLoaded():
         assert node.variable_passings == (var_pass,)
 
     def test_find_callback(self, mocker):
-        reader_mock = mocker.Mock(spec=TopicIgnoredReader)
+        reader_mock = mocker.Mock(spec=FilteredReader)
 
-        mocker.patch('caret_analyze.architecture.architecture_loaded.TopicIgnoredReader',
+        mocker.patch('caret_analyze.architecture.architecture_loaded.FilteredReader',
                      return_value=reader_mock)
 
         node_mock = mocker.Mock(spec=NodeStruct)
@@ -423,9 +424,9 @@ class TestNodesInfoLoaded():
             nodes_loaded.find_node_path(node_path_info_mock)
 
     def test_find_callbacks(self, mocker):
-        reader_mock = mocker.Mock(spec=TopicIgnoredReader)
+        reader_mock = mocker.Mock(spec=FilteredReader)
 
-        mocker.patch('caret_analyze.architecture.architecture_loaded.TopicIgnoredReader',
+        mocker.patch('caret_analyze.architecture.architecture_loaded.FilteredReader',
                      return_value=reader_mock)
 
         node_mock = mocker.Mock(spec=NodeStruct)
@@ -449,9 +450,9 @@ class TestNodesInfoLoaded():
             loaded.find_callbacks(('callback_id',))
 
     def test_get_callbacks(self, mocker):
-        reader_mock = mocker.Mock(spec=TopicIgnoredReader)
+        reader_mock = mocker.Mock(spec=FilteredReader)
 
-        mocker.patch('caret_analyze.architecture.architecture_loaded.TopicIgnoredReader',
+        mocker.patch('caret_analyze.architecture.architecture_loaded.FilteredReader',
                      return_value=reader_mock)
 
         mocker.patch.object(reader_mock, 'get_timer_callbacks', return_value=[])
@@ -481,134 +482,231 @@ class TestNodesInfoLoaded():
             loaded.get_callbacks('node_not_exit')
 
 
-class TestTopicIgnoreReader:
+@pytest.fixture
+def create_reader(mocker):
+    def _create_reader():
+        reader_mock = mocker.Mock(spec=ArchitectureReader)
+        mocker.patch.object(reader_mock, 'get_nodes', return_value=[])
+        mocker.patch.object(reader_mock, 'get_publishers', return_value=[])
+        mocker.patch.object(reader_mock, 'get_subscription_callbacks', return_value=[])
+        mocker.patch.object(reader_mock, 'get_timer_callbacks', return_value=[])
+        mocker.patch.object(reader_mock, 'get_callback_groups', return_value=[])
+        return reader_mock
+    return _create_reader
+
+
+class TestFilteredReaderCondition:
+
+    def test_default_case(self, create_reader):
+        reader_mock = create_reader()
+
+        condition = FilteredReaderCondition(reader_mock, [], [])
+        assert not condition.is_ignored_topic('')
+        assert not condition.is_ignored_callback_group_id('')
+        assert not condition.is_ignored_node('')
+        assert not condition.is_ignored_callback_id('')
+
+    def test_is_ignore_topic(self, mocker, create_reader):
+        reader_mock = create_reader()
+
+        node_name = 'node_name'
+        node_id = 'node_id'
+        topic_name = 'topic_name'
+        callback_id = 'callback_id'
+        symbol = 'symbol'
+
+        node = NodeValueWithId(node_name, node_id)
+        mocker.patch.object(reader_mock, 'get_nodes', return_value=[node])
+        publisher = PublisherValue(topic_name, node_name, node_id, None)
+        subscription = \
+            SubscriptionCallbackValue(callback_id, node_name, node_id, symbol, topic_name, None)
+
+        mocker.patch.object(reader_mock, 'get_publishers', return_value=[publisher])
+        condition = FilteredReaderCondition(reader_mock, [topic_name], [])
+        assert condition.is_ignored_topic(topic_name)
+
+        mocker.patch.object(reader_mock, 'get_subscription_callbacks', return_value=[subscription])
+        condition = FilteredReaderCondition(reader_mock, [topic_name], [])
+        assert condition.is_ignored_topic(topic_name)
+
+    def test_is_ignore_node(self, mocker, create_reader):
+        reader_mock = create_reader()
+
+        node_name = 'node_name'
+        node_id = 'node_id'
+
+        node = NodeValueWithId(node_name, node_id)
+        mocker.patch.object(reader_mock, 'get_nodes', return_value=[node])
+
+        condition = FilteredReaderCondition(reader_mock, [], [node_name])
+        assert condition.is_ignored_node(node_name)
+
+    def test_is_ignore_callback_id(self, mocker, create_reader):
+        reader_mock = create_reader()
+
+        node_name = 'node_name'
+        node_id = 'node_id'
+        topic_name = 'topic_name'
+        callback_id = 'callback_id'
+        symbol = 'symbol'
+
+        node = NodeValueWithId(node_name, node_id)
+        mocker.patch.object(reader_mock, 'get_nodes', return_value=[node])
+        subscription = \
+            SubscriptionCallbackValue(callback_id, node_name, node_id, symbol, topic_name, None)
+        timer = TimerCallbackValue(callback_id, node_name, node_id, symbol, 0, None)
+
+        mocker.patch.object(reader_mock, 'get_subscription_callbacks', return_value=[subscription])
+        condition = FilteredReaderCondition(reader_mock, [topic_name], [])
+        assert condition.is_ignored_callback_id(callback_id)
+
+        mocker.patch.object(reader_mock, 'get_subscription_callbacks', return_value=[subscription])
+        mocker.patch.object(reader_mock, 'get_timer_callbacks', return_value=[])
+        condition = FilteredReaderCondition(reader_mock, [], [node_name])
+        assert condition.is_ignored_callback_id(callback_id)
+
+        mocker.patch.object(reader_mock, 'get_subscription_callbacks', return_value=[])
+        mocker.patch.object(reader_mock, 'get_timer_callbacks', return_value=[timer])
+        condition = FilteredReaderCondition(reader_mock, [], [node_name])
+        assert condition.is_ignored_callback_id(callback_id)
+
+    def test_is_ignore_callback_group_id(self, mocker, create_reader):
+        reader_mock = create_reader()
+
+        node_name = 'node_name'
+        node_id = 'node_id'
+        type_name = CallbackGroupType.MUTUALLY_EXCLUSIVE.type_name
+        callback_group_id = 'callback_group_id'
+
+        node = NodeValueWithId(node_name, node_id)
+        mocker.patch.object(reader_mock, 'get_nodes', return_value=[node])
+        cbg = CallbackGroupValue(type_name, node_name, node_id, (), callback_group_id)
+
+        mocker.patch.object(reader_mock, 'get_callback_groups', return_value=[cbg])
+        condition = FilteredReaderCondition(reader_mock, [], [node_name])
+        assert condition.is_ignored_callback_group_id(callback_group_id)
+
+
+class TestFilteredReader:
 
     def test_get_publishers(self, mocker):
-        reader_mock = mocker.Mock(spec=TopicIgnoredReader)
-        mocker.patch.object(
-            TopicIgnoredReader, '_get_ignore_callback_ids', return_value={'ignore'})
-        reader = TopicIgnoredReader(reader_mock, ['/ignore'])
+        reader_mock = mocker.Mock(spec=ArchitectureReader)
+        condition_mock = mocker.Mock(spec=FilteredReaderCondition)
+
+        reader = FilteredReader(reader_mock, [], [], condition_mock)
         node = NodeValueWithId('node_name', 'node_id')
 
         pub = PublisherValue('/topic_name', node.node_name, node.node_id, None)
-        pub_ignored = PublisherValue('/ignore', node.node_name, node.node_id, None)
-        mocker.patch.object(reader_mock, 'get_publishers',
-                            return_value=[pub, pub_ignored])
+        mocker.patch.object(reader_mock, 'get_publishers', return_value=[pub])
 
-        pubs = reader.get_publishers(node)
-        assert len(pubs) == 1
-        assert pubs[0] == pub
+        mocker.patch.object(condition_mock, 'is_ignored_node', return_value=False)
+        mocker.patch.object(condition_mock, 'is_ignored_topic', return_value=False)
+        assert reader.get_publishers(node) == [pub]
+
+        mocker.patch.object(condition_mock, 'is_ignored_node', return_value=True)
+        mocker.patch.object(condition_mock, 'is_ignored_topic', return_value=False)
+        assert reader.get_publishers(node) == []
+
+        mocker.patch.object(condition_mock, 'is_ignored_node', return_value=False)
+        mocker.patch.object(condition_mock, 'is_ignored_topic', return_value=True)
+        assert reader.get_publishers(node) == []
 
     def test_get_subscriptions(self, mocker):
-        reader_mock = mocker.Mock(spec=TopicIgnoredReader)
-        mocker.patch.object(
-            TopicIgnoredReader, '_get_ignore_callback_ids', return_value={'ignore'})
+        reader_mock = mocker.Mock(spec=ArchitectureReader)
+        condition_mock = mocker.Mock(spec=FilteredReaderCondition)
 
-        reader = TopicIgnoredReader(reader_mock, ['/ignore'])
+        reader = FilteredReader(reader_mock, [], [], condition_mock)
         node = NodeValue('node_name', 'node_id')
 
         sub = SubscriptionValue('/topic_name', node.node_name, node.node_id, None)
-        sub_ignored = SubscriptionValue('/ignore', node.node_name, node.node_id, None)
-        mocker.patch.object(reader_mock, 'get_subscriptions',
-                            return_value=[sub, sub_ignored])
+        mocker.patch.object(reader_mock, 'get_subscriptions', return_value=[sub])
 
-        subs = reader.get_subscriptions(node)
-        assert len(subs) == 1
-        assert subs[0] == sub
+        mocker.patch.object(condition_mock, 'is_ignored_node', return_value=False)
+        mocker.patch.object(condition_mock, 'is_ignored_topic', return_value=False)
+        assert reader.get_subscriptions(node) == [sub]
+
+        mocker.patch.object(condition_mock, 'is_ignored_node', return_value=True)
+        mocker.patch.object(condition_mock, 'is_ignored_topic', return_value=False)
+        assert reader.get_subscriptions(node) == []
+
+        mocker.patch.object(condition_mock, 'is_ignored_node', return_value=False)
+        mocker.patch.object(condition_mock, 'is_ignored_topic', return_value=True)
+        assert reader.get_subscriptions(node) == []
 
     def test_get_executor(self, mocker):
         reader_mock = mocker.Mock(spec=ArchitectureReader)
+        condition_mock = mocker.Mock(spec=FilteredReaderCondition)
 
         exec_info = ExecutorValue(
             ExecutorType.SINGLE_THREADED_EXECUTOR.type_name,
             ('cbg_name',),
             executor_name='exec_name'
         )
-        mocker.patch.object(reader_mock, 'get_executors',
-                            return_value=(exec_info,))
+        mocker.patch.object(reader_mock, 'get_executors', return_value=(exec_info,))
 
-        mocker.patch.object(
-            TopicIgnoredReader, '_get_ignore_callback_ids', return_value=('cb_ignore'))
+        reader = FilteredReader(reader_mock, [], [], condition_mock)
 
-        reader = TopicIgnoredReader(reader_mock, ['/ignore'])
-        execs_info = reader.get_executors()
+        mocker.patch.object(condition_mock, 'is_ignored_callback_group_id', return_value=False)
+        assert reader.get_executors() == [exec_info]
 
-        expected = ExecutorValue(
-            ExecutorType.SINGLE_THREADED_EXECUTOR.type_name,
-            ('cbg_name',),
-            executor_name='exec_name'
-        )
-        assert execs_info == (expected,)
-
-    def test_get_ignore_callback_ids(self, mocker):
-        reader_mock = mocker.Mock(spec=ArchitectureReader)
-        node = NodeValueWithId('node', 'node')
-        mocker.patch.object(reader_mock, 'get_nodes',
-                            return_value=[node])
-
-        sub_info = SubscriptionCallbackValue(
-            'cb', node.node_name, node.node_id, 'symbol', 'topic', None
-        )
-        sub_info_ignore = SubscriptionCallbackValue(
-            'cb_ignore', node.node_name, node.node_id, 'symbol', 'topic_ignore', None
-        )
-        mocker.patch.object(
-            reader_mock, 'get_subscription_callbacks',
-            return_value=(sub_info, sub_info_ignore,)
-        )
-
-        ignore_ids = TopicIgnoredReader._get_ignore_callback_ids(reader_mock, [
-                                                                 'topic_ignore'])
-        assert ignore_ids == {'cb_ignore'}
+        mocker.patch.object(condition_mock, 'is_ignored_callback_group_id', return_value=True)
+        assert reader.get_executors() == []
 
     def test_get_subscription_callbacks_info(self, mocker):
-        reader_mock = mocker.Mock(spec=TopicIgnoredReader)
-        mocker.patch.object(
-            TopicIgnoredReader, '_get_ignore_callback_ids', return_value={'cb_id_ignore'})
-        reader = TopicIgnoredReader(reader_mock, ['/ignore'])
+        reader_mock = mocker.Mock(spec=FilteredReader)
+        condition_mock = mocker.Mock(spec=FilteredReaderCondition)
+
+        reader = FilteredReader(reader_mock, [], [], condition_mock)
         node = NodeValueWithId('node_name', 'node_name')
 
         sub_cb = SubscriptionCallbackValue(
             'cb_id', node.node_name, node.node_id, 'symbol', '/topic_name', None)
-        sub_cb_ignored = SubscriptionCallbackValue(
-            'cb_id_ignore', node.node_name, node.node_id, 'symbol', '/ignore', None)
-        mocker.patch.object(reader_mock, 'get_subscription_callbacks',
-                            return_value=[sub_cb, sub_cb_ignored])
+        mocker.patch.object(reader_mock, 'get_subscription_callbacks', return_value=[sub_cb])
 
-        sub_cbs = reader.get_subscription_callbacks(node)
-        assert len(sub_cbs) == 1
-        assert sub_cbs[0] == sub_cb
+        mocker.patch.object(condition_mock, 'is_ignored_node', return_value=False)
+        mocker.patch.object(condition_mock, 'is_ignored_topic', return_value=False)
+        assert reader.get_subscription_callbacks(node) == [sub_cb]
+
+        mocker.patch.object(condition_mock, 'is_ignored_node', return_value=True)
+        mocker.patch.object(condition_mock, 'is_ignored_topic', return_value=False)
+        assert reader.get_subscription_callbacks(node) == []
+
+        mocker.patch.object(condition_mock, 'is_ignored_node', return_value=False)
+        mocker.patch.object(condition_mock, 'is_ignored_topic', return_value=True)
+        assert reader.get_subscription_callbacks(node) == []
 
     def test_get_callback_groups_info(self, mocker):
-        reader_mock = mocker.Mock(spec=TopicIgnoredReader)
+        reader_mock = mocker.Mock(spec=FilteredReader)
+        condition_mock = mocker.Mock(spec=FilteredReaderCondition)
 
-        mocker.patch.object(
-            TopicIgnoredReader, '_get_ignore_callback_ids', return_value={'ignore'})
-
-        reader = TopicIgnoredReader(reader_mock, ['/ignore'])
-        callback_id = ['5', 'ignore']
+        reader = FilteredReader(reader_mock, [], [], condition_mock)
+        callback_id = '5'
         node = NodeValueWithId('node_name', 'node_id')
 
-        sub_cb = SubscriptionCallbackValue(
-            callback_id[0], node.node_name, node.node_id, 'symbol', '/topic_name', None)
-        sub_cb_ignored = SubscriptionCallbackValue(
-            callback_id[1], node.node_name, node.node_id, 'symbol', '/ignore', None)
         cbg = CallbackGroupValue(
             CallbackGroupType.MUTUALLY_EXCLUSIVE.type_name,
-            node.node_name, node.node_id, (sub_cb.callback_id, sub_cb_ignored.callback_id),
+            node.node_name, node.node_id, (callback_id,),
             'callback_group_id'
         )
+        mocker.patch.object(reader_mock, 'get_callback_groups', return_value=[cbg])
 
-        mocker.patch.object(reader_mock, 'get_callback_groups',
-                            return_value=[cbg])
-        mocker.patch.object(reader_mock, 'get_subscription_callbacks',
-                            return_value=[sub_cb, sub_cb_ignored])
+        mocker.patch.object(condition_mock, 'is_ignored_node', return_value=False)
+        mocker.patch.object(condition_mock, 'is_ignored_topic', return_value=False)
+        mocker.patch.object(condition_mock, 'is_ignored_callback_id', return_value=False)
+        assert reader.get_callback_groups(node) == [cbg]
 
-        callback_groups = reader.get_callback_groups(node)
-        assert len(callback_groups) == 1
-        cbg = callback_groups[0]
-        assert len(cbg.callback_ids) == 1
-        assert cbg.callback_ids[0] == callback_id[0]
+        expected = CallbackGroupValue(
+            CallbackGroupType.MUTUALLY_EXCLUSIVE.type_name,
+            node.node_name, node.node_id, (),
+            'callback_group_id'
+        )
+        mocker.patch.object(condition_mock, 'is_ignored_node', return_value=False)
+        mocker.patch.object(condition_mock, 'is_ignored_callback_id', return_value=True)
+        assert reader.get_callback_groups(node) == [expected]
+
+        mocker.patch.object(condition_mock, 'is_ignored_node', return_value=True)
+        mocker.patch.object(condition_mock, 'is_ignored_callback_id', return_value=False)
+        assert reader.get_callback_groups(node) == []
 
 
 class TestNodePathLoaded:

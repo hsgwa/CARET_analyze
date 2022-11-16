@@ -24,7 +24,7 @@ from typing import Callable, Collection, Dict, List, Optional, Tuple, Union
 
 
 from .architecture_exporter import ArchitectureExporter
-from .reader_interface import IGNORE_TOPICS
+from .reader_interface import IGNORE_NODES, IGNORE_TOPICS
 from .struct import (CommunicationStruct, ExecutorStruct,
                      NodeStruct)
 from .struct.callback import TimerCallbackStruct
@@ -47,10 +47,11 @@ class Architecture(Summarizable):
 
         # /parameter events and /rosout measurements are not yet supported.
         ignore_topics: List[str] = IGNORE_TOPICS
+        ignore_nodes: List[str] = IGNORE_NODES
 
         reader = ArchitectureReaderFactory.create_instance(
             file_type, file_path)
-        loaded = ArchitectureLoaded(reader, ignore_topics)
+        loaded = ArchitectureLoaded(reader, ignore_topics, ignore_nodes)
 
         self._nodes: Tuple[NodeStruct, ...] = loaded.nodes
         self._communications: Tuple[CommunicationStruct, ...] = loaded.communications

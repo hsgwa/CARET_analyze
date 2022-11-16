@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import fnmatch
 from itertools import product
 from logging import getLogger
 from typing import Dict, List, Optional, Sequence, Set, Tuple, Union
@@ -59,10 +60,11 @@ class ArchitectureLoaded():
     def __init__(
         self,
         reader: ArchitectureReader,
-        ignore_topics: List[str]
+        ignore_topics: List[str],
+        ignore_nodes: List[str]
     ) -> None:
 
-        topic_ignored_reader = TopicIgnoredReader(reader, ignore_topics)
+        topic_ignored_reader = FilteredReader(reader, ignore_topics, ignore_nodes)
 
         self._nodes: Tuple[NodeStruct, ...]
         nodes_loaded = NodeValuesLoaded(topic_ignored_reader)
@@ -1203,25 +1205,99 @@ class CallbackPathSearched():
         return self._data
 
 
-class TopicIgnoredReader(ArchitectureReader):
+class FilteredReaderCondition:
+
     def __init__(
         self,
         reader: ArchitectureReader,
         ignore_topics: List[str],
+        ignore_nodes: List[str]
     ) -> None:
         self._reader = reader
-        self._ignore_topics = ignore_topics
-        self._ignore_callback_ids = self._get_ignore_callback_ids(reader, ignore_topics)
+        self._ignore_nodes: Set[str] = set()
+        self._ignore_callback_ids: Set[str] = set()
+
+        for node in self._reader.get_nodes():
+            node_name = node.node_name
+            if self._match(node_name, ignore_nodes):
+                self._ignore_nodes.add(node_name)
+
+        nodes = reader.get_nodes()
+        for node in Progress.tqdm(nodes, 'Loading callbacks'):
+            for sub in self._reader.get_subscription_callbacks(node):
+                if sub.subscribe_topic_name not in ignore_topics and \
+                        sub.node_name not in ignore_nodes:
+                    continue
+
+                if sub.callback_id is None:
+                    continue
+                self._ignore_callback_ids.add(sub.callback_id)
+
+            for timer in self._reader.get_timer_callbacks(node):
+                if timer.callback_id is None:
+                    continue
+                self._ignore_callback_ids.add(timer.callback_id)
+
+        self._ignore_topics: Set[str] = set()
+        for node in self._reader.get_nodes():
+            for pub in self._reader.get_publishers(node):
+                topic_name = pub.topic_name
+                if self._match(topic_name, ignore_topics):
+                    self._ignore_topics.add(topic_name)
+            for sub in self._reader.get_subscription_callbacks(node):
+                topic_name = sub.subscribe_topic_name
+                if self._match(topic_name, ignore_topics):
+                    self._ignore_topics.add(topic_name)
+
+        self._ignore_cbgs: Set[str] = set()
+        for node in self._reader.get_nodes():
+            for cbg in self._reader.get_callback_groups(node):
+                node_name = cbg.node_name
+                if self._match(node_name, ignore_nodes):
+                    self._ignore_cbgs.add(cbg.callback_group_id)
+
+    def is_ignored_topic(self, topic_name: str):
+        return topic_name in self._ignore_topics
+
+    def is_ignored_node(self, node_name: str):
+        return node_name in self._ignore_nodes
+
+    def is_ignored_callback_id(self, callback_id: str):
+        return callback_id in self._ignore_callback_ids
+
+    def is_ignored_callback_group_id(self, callback_group_id: str):
+        return callback_group_id in self._ignore_cbgs
+
+    @staticmethod
+    def _match(target: str, ignore_condition: List[str]) -> bool:
+        return any(fnmatch.fnmatch(target, ignore) for ignore in ignore_condition)
+
+
+class FilteredReader(ArchitectureReader):
+
+    def __init__(
+        self,
+        reader: ArchitectureReader,
+        ignore_topics: List[str],
+        ignore_nodes: List[str],
+        condition: Optional[FilteredReaderCondition] = None
+    ) -> None:
+        self._reader = reader
+        self._condition = condition or FilteredReaderCondition(reader, ignore_topics, ignore_nodes)
 
     def get_publishers(self, node: NodeValue) -> List[PublisherValue]:
+        if self._condition.is_ignored_node(node.node_name):
+            return []
         publishers: List[PublisherValue] = []
         for publisher in self._reader.get_publishers(node):
-            if publisher.topic_name in self._ignore_topics:
+            if self._condition.is_ignored_topic(publisher.topic_name):
                 continue
             publishers.append(publisher)
         return publishers
 
     def get_timers(self, node: NodeValue) -> List[TimerValue]:
+        if self._condition.is_ignored_node(node.node_name):
+            return []
         timers: List[TimerValue] = []
         for timer in self._reader.get_timers(node):
             timers.append(timer)
@@ -1231,12 +1307,15 @@ class TopicIgnoredReader(ArchitectureReader):
         self,
         node: NodeValue
     ) -> Sequence[CallbackGroupValue]:
+        if self._condition.is_ignored_node(node.node_name):
+            return []
+
         return [
             CallbackGroupValue(
                 cbg.callback_group_type.type_name,
                 cbg.node_name,
                 cbg.node_id,
-                tuple(set(cbg.callback_ids) - self._ignore_callback_ids),
+                self._filter_callback_id(cbg.callback_ids),
                 cbg.callback_group_id,
                 callback_group_name=cbg.callback_group_name
             )
@@ -1245,12 +1324,26 @@ class TopicIgnoredReader(ArchitectureReader):
         ]
 
     def get_executors(self) -> Sequence[ExecutorValue]:
-        return self._reader.get_executors()
+        executors = []
+
+        for executor in self._reader.get_executors():
+            filtered_cbgs = self._filter_callback_group_id(executor.callback_group_ids)
+            if len(filtered_cbgs) == 0:
+                continue
+
+            executors.append(ExecutorValue(
+                executor_type_name=executor.executor_type.type_name,
+                callback_group_ids=tuple(filtered_cbgs),
+                executor_name=executor.executor_name))
+
+        return executors
 
     def get_message_contexts(
         self,
         node: NodeValue
     ) -> Sequence[Dict]:
+        if self._condition.is_ignored_node(node.node_name):
+            return []
         return self._reader.get_message_contexts(node)
 
     def _filter_callback_id(
@@ -1258,33 +1351,18 @@ class TopicIgnoredReader(ArchitectureReader):
         callback_ids: Tuple[str, ...]
     ) -> Tuple[str, ...]:
         def is_not_ignored(callback_id: str):
-            return callback_id not in self._ignore_callback_ids
+            return not self._condition.is_ignored_callback_id(callback_id)
 
         return tuple(Util.filter_items(is_not_ignored, callback_ids))
 
-    @staticmethod
-    def _get_ignore_callback_ids(
-        reader: ArchitectureReader,
-        ignore_topics: List[str]
-    ) -> Set[str]:
-        ignore_callback_ids: List[str] = []
-        ignore_topic_set = set(ignore_topics)
+    def _filter_callback_group_id(
+        self,
+        callback_ids: Tuple[str, ...]
+    ) -> Tuple[str, ...]:
+        def is_not_ignored(callback_group_id: str):
+            return not self._condition.is_ignored_callback_group_id(callback_group_id)
 
-        nodes = reader.get_nodes()
-        for node in Progress.tqdm(nodes, 'Loading callbacks'):
-            node = NodeValue(node.node_name, node.node_id)
-
-            sub = reader.get_subscription_callbacks(node)
-            for sub_val in sub:
-                if sub_val.subscribe_topic_name not in ignore_topic_set:
-                    continue
-
-                if sub_val.callback_id is None:
-                    continue
-
-                ignore_callback_ids.append(sub_val.callback_id)
-
-        return set(ignore_callback_ids)
+        return tuple(Util.filter_items(is_not_ignored, callback_ids))
 
     def get_paths(self) -> Sequence[PathValue]:
         return self._reader.get_paths()
@@ -1293,15 +1371,27 @@ class TopicIgnoredReader(ArchitectureReader):
         self,
         callback_group_id: str
     ) -> Sequence[Tuple[Optional[str], Optional[str]]]:
-        return self._reader.get_node_names_and_cb_symbols(callback_group_id)
+        node_names = []
+        for node_name in self._reader.get_node_names_and_cb_symbols(callback_group_id):
+            if self._condition.is_ignored_node(node_name):
+                continue
+            node_names.append(node_name)
+        return node_names
 
     def get_nodes(self) -> Sequence[NodeValueWithId]:
-        return self._reader.get_nodes()
+        nodes: List[NodeValueWithId] = []
+        for node in self._reader.get_nodes():
+            if self._condition.is_ignored_node(node.node_name):
+                continue
+            nodes.append(node)
+        return nodes
 
     def get_subscriptions(self, node: NodeValue) -> List[SubscriptionValue]:
+        if self._condition.is_ignored_node(node.node_name):
+            return []
         subscriptions: List[SubscriptionValue] = []
         for subscription in self._reader.get_subscriptions(node):
-            if subscription.topic_name in self._ignore_topics:
+            if self._condition.is_ignored_topic(subscription.topic_name):
                 continue
             subscriptions.append(subscription)
         return subscriptions
@@ -1310,21 +1400,28 @@ class TopicIgnoredReader(ArchitectureReader):
         self,
         node: NodeValue
     ) -> Sequence[VariablePassingValue]:
+        if self._condition.is_ignored_node(node.node_name):
+            return []
         return self._reader.get_variable_passings(node)
 
     def get_timer_callbacks(
         self,
         node: NodeValue
     ) -> Sequence[TimerCallbackValue]:
+        if self._condition.is_ignored_node(node.node_name):
+            return []
         return self._reader.get_timer_callbacks(node)
 
     def get_subscription_callbacks(
         self,
         node: NodeValue
     ) -> Sequence[SubscriptionCallbackValue]:
+        if self._condition.is_ignored_node(node.node_name):
+            return []
+
         callbacks: List[SubscriptionCallbackValue] = []
         for subscription_callback in self._reader.get_subscription_callbacks(node):
-            if subscription_callback.subscribe_topic_name in self._ignore_topics:
+            if self._condition.is_ignored_topic(subscription_callback.subscribe_topic_name):
                 continue
             callbacks.append(subscription_callback)
         return callbacks

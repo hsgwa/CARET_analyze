@@ -24,6 +24,7 @@ from ..value_objects import (CallbackGroupValue, ExecutorValue, NodeValue,
 
 UNDEFINED_STR = 'UNDEFINED'
 IGNORE_TOPICS = ['/parameter_events', '/rosout', '/clock']
+IGNORE_NODES = ['*/caret_trace*']
 
 
 class ArchitectureReader(metaclass=ABCMeta):
