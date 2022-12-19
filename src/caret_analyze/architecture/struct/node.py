@@ -188,24 +188,27 @@ class NodeStruct():
             else tuple(v.to_value() for v in self.variable_passings))
 
     def assign_message_context(self, context_type, sub_topic_name: str, pub_topic_name: str):
-        try:
-            path = self.get_path(sub_topic_name, pub_topic_name)
-            path.message_context =\
-                MessageContextStruct.create_instance(context_type, {},
-                                                     self.node_name, path.subscription,
-                                                     path.publisher, None)
-        except ItemNotFoundError:
-            subscription: SubscriptionStruct = \
-                Util.find_one(lambda x: x.topic_name == sub_topic_name, self._subscriptions)
-            publisher: PublisherStruct = \
-                Util.find_one(lambda x: x.topic_name == pub_topic_name, self._publishers)
-            message_context =\
-                MessageContextStruct.create_instance(context_type, {},
-                                                     self.node_name, subscription,
-                                                     publisher, None)
-            path = NodePathStruct(self.node_name, subscription, publisher,
-                                  None, message_context)
-            self._node_paths.append(path)
+        arch = get_message_contextを追加したArchitectureReader
+        self._paths = NodeValuesLoaded._search_node_paths(self, arch)
+
+        # try:
+        #     path = self.get_path(sub_topic_name, pub_topic_name)
+        #     path.message_context =\
+        #         MessageContextStruct.create_instance(context_type, {},
+        #                                              self.node_name, path.subscription,
+        #                                              path.publisher, None)
+        # except ItemNotFoundError:
+        #     subscription: SubscriptionStruct = \
+        #         Util.find_one(lambda x: x.topic_name == sub_topic_name, self._subscriptions)
+        #     publisher: PublisherStruct = \
+        #         Util.find_one(lambda x: x.topic_name == pub_topic_name, self._publishers)
+        #     message_context =\
+        #         MessageContextStruct.create_instance(context_type, {},
+        #                                              self.node_name, subscription,
+        #                                              publisher, None)
+        #     path = NodePathStruct(self.node_name, subscription, publisher,
+        #                           None, message_context)
+        #     self._node_paths.append(path)
 
     def assign_publisher(self, pub_topic_name: str, callback_function_name: str):
         callback: CallbackStruct = \
@@ -216,12 +219,26 @@ class NodeStruct():
 
         self._publishers.append(publisher)
 
-        path = NodePathStruct(self.node_name, None, publisher, [callback], None)
-        self._node_paths.append(path)
+        # 新規Pubが追加されたNodeStructに
+        # ただし、node pathsは要修正。
+        from ..architecture_loaded import NodeValuesLoaded
+        self.paths[0].message_context.to_dict()
 
-        for s in self.subscriptions:
-            path = NodePathStruct(self.node_name, s, publisher, [callback], None)
-            self._node_paths.append(path)
+        def get_message_contexts() -> List[Dict]:
+            return [
+                path.message_context.to_dict()
+                for path
+                in self._paths
+                if path.message_context is not None]
+
+        self._paths = NodeValuesLoaded._search_node_paths(self, get_message_context)
+
+        # path = NodePathStruct(self.node_name, None, publisher, [callback], None)
+        # self._node_paths.append(path)
+
+        # for s in self.subscriptions:
+        #     path = NodePathStruct(self.node_name, s, publisher, [callback], None)
+        #     self._node_paths.append(path)
 
     def assign_message_passings(self, src_callback_name: str, des_callback_name: str):
         source_callback =\
@@ -235,6 +252,8 @@ class NodeStruct():
             self._variable_passings_info = [passing]
         else:
             self._variable_passings_info.append(passing)
+
+        # self._paths =
 
     def rename_node(self, src: str, dst: str) -> None:
         if self.node_name == src:

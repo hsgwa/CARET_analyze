@@ -140,6 +140,13 @@ class ArchitectureReaderYaml(ArchitectureReader):
             self._get_value(context, 'context_type')
             self._get_value(context, 'publisher_topic_name')
             self._get_value(context, 'subscription_topic_name')
+        # [
+        #     {
+        #         'context_type': 'hoge',
+        #         'publisher_topic_name': 'huge',
+        #         'subscription_name': 'hoge'
+        #     }
+        # ]
         return context_dicts
 
     def get_callback_groups(

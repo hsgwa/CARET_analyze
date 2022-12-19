@@ -426,7 +426,7 @@ class NodeValuesLoaded():
         )
 
         try:
-            node_paths = NodeValuesLoaded._search_node_paths(node_struct, reader)
+            node_paths = NodeValuesLoaded._search_node_paths(node_struct, get_message_context)
             node_path_added = NodeStruct(
                 node_struct.node_name, node_struct.publishers,
                 node_struct.subscriptions,
@@ -446,8 +446,11 @@ class NodeValuesLoaded():
     @staticmethod
     def _search_node_paths(
         node: NodeStruct,
-        reader: ArchitectureReader
+        get_message_contexts: Callable[None, [List[Dict]]]
     ) -> List[NodePathStruct]:
+        # NodePath, sub: None  , pub:** Topic
+        # NodePath, sub: Topipc, pub:** Topic
+        # NodePath, sub: Topipc, pub:** None
 
         node_paths: List[NodePathStruct] = []
 
@@ -475,11 +478,20 @@ class NodeValuesLoaded():
         # add callback-graph paths
         logger.info('[callback_chain]')
         node_paths += list(CallbackPathSearched(node).data)
+        # minmum ケース sub して、"そのコールバック"でpublish
+        # subtopic, pubトピック名、 child=そのコールバック
+
+        # sub callback
+        # variable passing
+        # sub cb -> timer cb &publish
+        # child = sub cb -> var passing[subcb->timercb] -> timer cb
+        # pubしてるコールバック
 
         # add pub-sub pair graph paths
         logger.info('\n[pub-sub pair]')
         pubs = node.publishers
         subs = node.subscriptions
+        # pubs と subトピック名の全ペアで重複しないように追加
         node_path_pub_sub_pairs = NodePathCreated(subs, pubs).data
         for node_path in node_path_pub_sub_pairs:
             added_pub_sub_pairs = [(n.publish_topic_name, n.subscribe_topic_name)
