@@ -319,82 +319,83 @@ class TestRecords:
             with pytest.raises(InvalidArgumentError):
                 records.drop_columns('')
 
-    def test_rename_columns(self):
-        records_py: Records = Records(
-            [
-                Record({'stamp': 0, 'aaa': 1}),
-                Record(),
-            ], [ColumnValue('stamp'), ColumnValue('aaa')]
-        )
+    class TestRenameColumns:
+        def test_rename_columns(self):
+            records_py: Records = Records(
+                [
+                    Record({'stamp': 0, 'aaa': 1}),
+                    Record(),
+                ], [ColumnValue('stamp'), ColumnValue('aaa')]
+            )
 
-        records_cpp = to_cpp_records(records_py)
+            records_cpp = to_cpp_records(records_py)
 
-        for records, records_type in zip([records_py, records_cpp], [Records, RecordsCppImpl]):
-            if records_type == RecordsCppImpl and not CppImplEnabled:
-                continue
+            for records, records_type in zip([records_py, records_cpp], [Records, RecordsCppImpl]):
+                if records_type == RecordsCppImpl and not CppImplEnabled:
+                    continue
 
-            assert 'stamp' in records.data[0].columns
-            assert 'stamp_' not in records.data[0].columns
-            assert 'stamp' not in records.data[1].columns
-            assert 'stamp_' not in records.data[1].columns
+                assert 'stamp' in records.data[0].columns
+                assert 'stamp_' not in records.data[0].columns
+                assert 'stamp' not in records.data[1].columns
+                assert 'stamp_' not in records.data[1].columns
 
-            assert 'aaa' in records.data[0].columns
-            assert 'aaa_' not in records.data[0].columns
-            assert 'aaa' not in records.data[1].columns
-            assert 'aaa_' not in records.data[1].columns
+                assert 'aaa' in records.data[0].columns
+                assert 'aaa_' not in records.data[0].columns
+                assert 'aaa' not in records.data[1].columns
+                assert 'aaa_' not in records.data[1].columns
 
-            assert records.columns == ['stamp', 'aaa']
+                assert records.columns == ['stamp', 'aaa']
 
-            rename_keys = {
-                'aaa': 'aaa_',
-                'stamp': 'stamp_',
-            }
+                rename_keys = {
+                    'aaa': 'aaa_',
+                    'stamp': 'stamp_',
+                }
 
-            records.rename_columns(rename_keys)
-            assert 'stamp' not in records.data[0].columns
-            assert 'stamp_' in records.data[0].columns
-            assert 'stamp' not in records.data[1].columns
-            assert 'stamp_' not in records.data[1].columns
+                records.rename_columns(rename_keys)
+                assert 'stamp' not in records.data[0].columns
+                assert 'stamp_' in records.data[0].columns
+                assert 'stamp' not in records.data[1].columns
+                assert 'stamp_' not in records.data[1].columns
 
-            assert 'aaa' not in records.data[0].columns
-            assert 'aaa_' in records.data[0].columns
-            assert 'aaa' not in records.data[1].columns
-            assert 'aaa_' not in records.data[1].columns
+                assert 'aaa' not in records.data[0].columns
+                assert 'aaa_' in records.data[0].columns
+                assert 'aaa' not in records.data[1].columns
+                assert 'aaa_' not in records.data[1].columns
 
-            assert records.columns == ['stamp_', 'aaa_']
+                assert records.columns == ['stamp_', 'aaa_']
 
-    def test_rename_columns_validate_argument(self):
-        records_py: Records = Records(
-            [
-                Record({'AAA': 0, 'BBB': 0}),
-            ], [ColumnValue('AAA'), ColumnValue('BBB')]
-        )
-        records_cpp = to_cpp_records(records_py)
+        def test_validate_argument(self):
+            records_py: Records = Records(
+                [
+                    Record({'AAA': 0, 'BBB': 0}),
+                ], [ColumnValue('AAA'), ColumnValue('BBB')]
+            )
+            records_cpp = to_cpp_records(records_py)
 
-        for records, records_type in zip([records_py, records_cpp], [Records, RecordsCppImpl]):
-            if records_type == RecordsCppImpl and not CppImplEnabled:
-                continue
+            for records, records_type in zip([records_py, records_cpp], [Records, RecordsCppImpl]):
+                if records_type == RecordsCppImpl and not CppImplEnabled:
+                    continue
 
-            rename_keys = {'AAA': 'AAA_'}
-            records.rename_columns(rename_keys)
-
-            with pytest.raises(InvalidArgumentError):
-                rename_keys = {'AAA': 'AAA'}
+                rename_keys = {'AAA': 'AAA_'}
                 records.rename_columns(rename_keys)
 
-            # overwrite columns
-            with pytest.raises(InvalidArgumentError):
-                rename_keys = {'AAA': 'AAA_', 'BBB': 'AAA'}
-                records.rename_columns(rename_keys)
+                with pytest.raises(InvalidArgumentError):
+                    rename_keys = {'AAA': 'AAA'}
+                    records.rename_columns(rename_keys)
 
-            with pytest.raises(InvalidArgumentError):
-                rename_keys = {'AAA': 'BBB', 'BBB': 'BBB_'}
-                records.rename_columns(rename_keys)
+                # overwrite columns
+                with pytest.raises(InvalidArgumentError):
+                    rename_keys = {'AAA': 'AAA_', 'BBB': 'AAA'}
+                    records.rename_columns(rename_keys)
 
-            # Duplicate columns after change
-            rename_keys = {'AAA': 'AAA_', 'BBB': 'AAA_'}
-            with pytest.raises(InvalidArgumentError):
-                records.rename_columns(rename_keys)
+                with pytest.raises(InvalidArgumentError):
+                    rename_keys = {'AAA': 'BBB', 'BBB': 'BBB_'}
+                    records.rename_columns(rename_keys)
+
+                # Duplicate columns after change
+                rename_keys = {'AAA': 'AAA_', 'BBB': 'AAA_'}
+                with pytest.raises(InvalidArgumentError):
+                    records.rename_columns(rename_keys)
 
     def test_clone(self):
         records_py: Records = Records(
@@ -582,206 +583,208 @@ class TestRecords:
             with pytest.raises(InvalidArgumentError):
                 records.get_row_series(100)
 
-    def test_groupby_1key(self):
-        records_py = Records(
-            [
-                Record({'a': 0, 'b': 1}),
-                Record({'a': 0, 'b': 2}),
-                Record({'a': 5, 'b': 3}),
-            ],
-            [ColumnValue('a'), ColumnValue('b')]
-        )
-        expect = {}
-        expect[(0,)] = Records(
-            [
-                Record({'a': 0, 'b': 1}),
-                Record({'a': 0, 'b': 2}),
-            ],
-            [ColumnValue('a'), ColumnValue('b')]
-        )
+    class TestGroupby:
 
-        expect[(5,)] = Records(
-            [
-                Record({'a': 5, 'b': 3}),
-            ],
-            [ColumnValue('a'), ColumnValue('b')]
-        )
+        def test_1key(self):
+            records_py = Records(
+                [
+                    Record({'a': 0, 'b': 1}),
+                    Record({'a': 0, 'b': 2}),
+                    Record({'a': 5, 'b': 3}),
+                ],
+                [ColumnValue('a'), ColumnValue('b')]
+            )
+            expect = {}
+            expect[(0,)] = Records(
+                [
+                    Record({'a': 0, 'b': 1}),
+                    Record({'a': 0, 'b': 2}),
+                ],
+                [ColumnValue('a'), ColumnValue('b')]
+            )
 
-        group = records_py.groupby(['a'])
+            expect[(5,)] = Records(
+                [
+                    Record({'a': 5, 'b': 3}),
+                ],
+                [ColumnValue('a'), ColumnValue('b')]
+            )
 
-        assert group.keys() == expect.keys()
+            group = records_py.groupby(['a'])
 
-        for k, v in group.items():
-            assert v.equals(expect[k])
+            assert group.keys() == expect.keys()
 
-        if CppImplEnabled:
-            records_cpp = to_cpp_records(records_py)
-            expect_cpp = {}
-            for k, v in expect.items():
-                expect_cpp[k] = to_cpp_records(v)
-            group_cpp = records_cpp.groupby(['a'])
+            for k, v in group.items():
+                assert v.equals(expect[k])
 
-            assert group_cpp.keys() == expect_cpp.keys()
+            if CppImplEnabled:
+                records_cpp = to_cpp_records(records_py)
+                expect_cpp = {}
+                for k, v in expect.items():
+                    expect_cpp[k] = to_cpp_records(v)
+                group_cpp = records_cpp.groupby(['a'])
 
-            for k, v in group_cpp.items():
-                records = expect_cpp[k]
-                assert v.equals(records)
+                assert group_cpp.keys() == expect_cpp.keys()
 
-    def test_groupby_1key_key_missing(self):
-        records_py = Records(
-            [
-                Record({'a': 0, 'b': 1}),
-                Record({'b': 2}),
-                Record({'a': 5, 'b': 3}),
-            ],
-            [ColumnValue('a'), ColumnValue('b')]
-        )
-        expect = {}
-        expect[(0,)] = Records(
-            [
-                Record({'a': 0, 'b': 1}),
-            ],
-            [ColumnValue('a'), ColumnValue('b')]
-        )
+                for k, v in group_cpp.items():
+                    records = expect_cpp[k]
+                    assert v.equals(records)
 
-        expect[(5,)] = Records(
-            [
-                Record({'a': 5, 'b': 3}),
-            ],
-            [ColumnValue('a'), ColumnValue('b')]
-        )
-        expect[(2**64-1,)] = Records(
-            [
-                Record({'b': 2}),
-            ],
-            [ColumnValue('a'), ColumnValue('b')]
-        )
+        def test_1key_key_missing(self):
+            records_py = Records(
+                [
+                    Record({'a': 0, 'b': 1}),
+                    Record({'b': 2}),
+                    Record({'a': 5, 'b': 3}),
+                ],
+                [ColumnValue('a'), ColumnValue('b')]
+            )
+            expect = {}
+            expect[(0,)] = Records(
+                [
+                    Record({'a': 0, 'b': 1}),
+                ],
+                [ColumnValue('a'), ColumnValue('b')]
+            )
 
-        group = records_py.groupby(['a'])
+            expect[(5,)] = Records(
+                [
+                    Record({'a': 5, 'b': 3}),
+                ],
+                [ColumnValue('a'), ColumnValue('b')]
+            )
+            expect[(2**64-1,)] = Records(
+                [
+                    Record({'b': 2}),
+                ],
+                [ColumnValue('a'), ColumnValue('b')]
+            )
 
-        assert group.keys() == expect.keys()
+            group = records_py.groupby(['a'])
 
-        for k, v in group.items():
-            assert v.equals(expect[k])
+            assert group.keys() == expect.keys()
 
-        if CppImplEnabled:
-            records_cpp = to_cpp_records(records_py)
-            expect_cpp = {}
-            for k, v in expect.items():
-                expect_cpp[k] = to_cpp_records(v)
-            group_cpp = records_cpp.groupby(['a'])
+            for k, v in group.items():
+                assert v.equals(expect[k])
 
-            assert group_cpp.keys() == expect_cpp.keys()
+            if CppImplEnabled:
+                records_cpp = to_cpp_records(records_py)
+                expect_cpp = {}
+                for k, v in expect.items():
+                    expect_cpp[k] = to_cpp_records(v)
+                group_cpp = records_cpp.groupby(['a'])
 
-            for k, v in group_cpp.items():
-                assert v.equals(expect_cpp[k])
+                assert group_cpp.keys() == expect_cpp.keys()
 
-    def test_groupby_2key(self):
-        records_py = Records(
-            [
-                Record({'a': 0, 'b': 1, 'c': 2}),
-                Record({'a': 0, 'b': 2, 'c': 3}),
-                Record({'a': 5, 'b': 3, 'c': 3}),
-                Record({'a': 5, 'b': 4, 'c': 3}),
-            ],
-            [ColumnValue('a'), ColumnValue('b'), ColumnValue('c')]
-        )
+                for k, v in group_cpp.items():
+                    assert v.equals(expect_cpp[k])
 
-        expect = {}
-        expect[(0, 2)] = Records(
-            [
-                Record({'a': 0, 'b': 1, 'c': 2}),
-            ],
-            [ColumnValue('a'), ColumnValue('b'), ColumnValue('c')]
-        )
-        expect[(0, 3)] = Records(
-            [
-                Record({'a': 0, 'b': 2, 'c': 3}),
-            ],
-            [ColumnValue('a'), ColumnValue('b'), ColumnValue('c')]
-        )
-        expect[(5, 3)] = Records(
-            [
-                Record({'a': 5, 'b': 3, 'c': 3}),
-                Record({'a': 5, 'b': 4, 'c': 3}),
-            ],
-            [ColumnValue('a'), ColumnValue('b'), ColumnValue('c')]
-        )
+        def test_2key(self):
+            records_py = Records(
+                [
+                    Record({'a': 0, 'b': 1, 'c': 2}),
+                    Record({'a': 0, 'b': 2, 'c': 3}),
+                    Record({'a': 5, 'b': 3, 'c': 3}),
+                    Record({'a': 5, 'b': 4, 'c': 3}),
+                ],
+                [ColumnValue('a'), ColumnValue('b'), ColumnValue('c')]
+            )
 
-        group = records_py.groupby(['a', 'c'])
+            expect = {}
+            expect[(0, 2)] = Records(
+                [
+                    Record({'a': 0, 'b': 1, 'c': 2}),
+                ],
+                [ColumnValue('a'), ColumnValue('b'), ColumnValue('c')]
+            )
+            expect[(0, 3)] = Records(
+                [
+                    Record({'a': 0, 'b': 2, 'c': 3}),
+                ],
+                [ColumnValue('a'), ColumnValue('b'), ColumnValue('c')]
+            )
+            expect[(5, 3)] = Records(
+                [
+                    Record({'a': 5, 'b': 3, 'c': 3}),
+                    Record({'a': 5, 'b': 4, 'c': 3}),
+                ],
+                [ColumnValue('a'), ColumnValue('b'), ColumnValue('c')]
+            )
 
-        assert group.keys() == expect.keys()
+            group = records_py.groupby(['a', 'c'])
 
-        for k, v in group.items():
-            assert v.equals(expect[k])
+            assert group.keys() == expect.keys()
 
-        if CppImplEnabled:
-            records_cpp = to_cpp_records(records_py)
-            expect_cpp = {}
-            for k, v in expect.items():
-                expect_cpp[k] = to_cpp_records(v)
-            group_cpp = records_cpp.groupby(['a', 'c'])
+            for k, v in group.items():
+                assert v.equals(expect[k])
 
-            assert group_cpp.keys() == expect_cpp.keys()
+            if CppImplEnabled:
+                records_cpp = to_cpp_records(records_py)
+                expect_cpp = {}
+                for k, v in expect.items():
+                    expect_cpp[k] = to_cpp_records(v)
+                group_cpp = records_cpp.groupby(['a', 'c'])
 
-            for k, v in group_cpp.items():
-                assert v.equals(expect_cpp[k])
+                assert group_cpp.keys() == expect_cpp.keys()
 
-    def test_groupby_3key(self):
-        records_py = Records(
-            [
-                Record({'a': 0, 'b': 1, 'c': 2}),
-                Record({'a': 0, 'b': 2, 'c': 3}),
-                Record({'a': 5, 'b': 3, 'c': 3}),
-                Record({'a': 5, 'b': 4, 'c': 3}),
-            ],
-            [ColumnValue('a'), ColumnValue('b'), ColumnValue('c')]
-        )
+                for k, v in group_cpp.items():
+                    assert v.equals(expect_cpp[k])
 
-        expect = {}
-        expect[(0, 1, 2)] = Records(
-            [
-                Record({'a': 0, 'b': 1, 'c': 2}),
-            ],
-            [ColumnValue('a'), ColumnValue('b'), ColumnValue('c')]
-        )
-        expect[(0, 2, 3)] = Records(
-            [
-                Record({'a': 0, 'b': 2, 'c': 3}),
-            ],
-            [ColumnValue('a'), ColumnValue('b'), ColumnValue('c')]
-        )
-        expect[(5, 3, 3)] = Records(
-            [
-                Record({'a': 5, 'b': 3, 'c': 3}),
-            ],
-            [ColumnValue('a'), ColumnValue('b'), ColumnValue('c')]
-        )
-        expect[(5, 4, 3)] = Records(
-            [
-                Record({'a': 5, 'b': 4, 'c': 3}),
-            ],
-            [ColumnValue('a'), ColumnValue('b'), ColumnValue('c')]
-        )
+        def test_3key(self):
+            records_py = Records(
+                [
+                    Record({'a': 0, 'b': 1, 'c': 2}),
+                    Record({'a': 0, 'b': 2, 'c': 3}),
+                    Record({'a': 5, 'b': 3, 'c': 3}),
+                    Record({'a': 5, 'b': 4, 'c': 3}),
+                ],
+                [ColumnValue('a'), ColumnValue('b'), ColumnValue('c')]
+            )
 
-        group = records_py.groupby(['a', 'b', 'c'])
+            expect = {}
+            expect[(0, 1, 2)] = Records(
+                [
+                    Record({'a': 0, 'b': 1, 'c': 2}),
+                ],
+                [ColumnValue('a'), ColumnValue('b'), ColumnValue('c')]
+            )
+            expect[(0, 2, 3)] = Records(
+                [
+                    Record({'a': 0, 'b': 2, 'c': 3}),
+                ],
+                [ColumnValue('a'), ColumnValue('b'), ColumnValue('c')]
+            )
+            expect[(5, 3, 3)] = Records(
+                [
+                    Record({'a': 5, 'b': 3, 'c': 3}),
+                ],
+                [ColumnValue('a'), ColumnValue('b'), ColumnValue('c')]
+            )
+            expect[(5, 4, 3)] = Records(
+                [
+                    Record({'a': 5, 'b': 4, 'c': 3}),
+                ],
+                [ColumnValue('a'), ColumnValue('b'), ColumnValue('c')]
+            )
 
-        assert group.keys() == expect.keys()
+            group = records_py.groupby(['a', 'b', 'c'])
 
-        for k, v in group.items():
-            assert v.equals(expect[k])
+            assert group.keys() == expect.keys()
 
-        if CppImplEnabled:
-            records_cpp = to_cpp_records(records_py)
-            expect_cpp = {}
-            for k, v in expect.items():
-                expect_cpp[k] = to_cpp_records(v)
-            group_cpp = records_cpp.groupby(['a', 'b', 'c'])
+            for k, v in group.items():
+                assert v.equals(expect[k])
 
-            assert group_cpp.keys() == expect_cpp.keys()
+            if CppImplEnabled:
+                records_cpp = to_cpp_records(records_py)
+                expect_cpp = {}
+                for k, v in expect.items():
+                    expect_cpp[k] = to_cpp_records(v)
+                group_cpp = records_cpp.groupby(['a', 'b', 'c'])
 
-            for k, v in group_cpp.items():
-                assert v.equals(expect_cpp[k])
+                assert group_cpp.keys() == expect_cpp.keys()
+
+                for k, v in group_cpp.items():
+                    assert v.equals(expect_cpp[k])
 
     def test_append_column(self):
         expects_py = Records(
@@ -1052,1052 +1055,1054 @@ class TestRecords:
             with pytest.raises(InvalidArgumentError):
                 records.reindex(['a', 'b', 'c'])
 
-    @pytest.mark.parametrize(
-        'how, records_expect_py',
-        [
-            (
-                'inner',
-                Records(
-                    [
-                        Record({'value_left': 10, 'value_right': 10,
-                               'stamp': 1, 'stamp_': 2}),
-                        Record({'value_left': 20, 'value_right': 20,
-                               'stamp': 3, 'stamp_': 4}),
-                        Record({'value_left': 30, 'value_right': 30,
-                               'stamp': 5, 'stamp_': 6}),
-                        Record({'value_left': 30, 'value_right': 30,
-                               'stamp': 5, 'stamp_': 6}),
-                        Record({'value_left': 70, 'value_right': 70,
-                               'stamp': 9, 'stamp_': 11}),
-                        Record({'value_left': 70, 'value_right': 70,
-                               'stamp': 10, 'stamp_': 11}),
-                    ],
-                    [
-                        ColumnValue('stamp'),
-                        ColumnValue('value_left'),
-                        ColumnValue('stamp_'),
-                        ColumnValue('value_right'),
-                    ]
-                ),
-            ),
-            (
-                'left',
-                Records(
-                    [
-                        Record({'value_left': 10, 'value_right': 10,
-                               'stamp': 1, 'stamp_': 2}),
-                        Record({'value_left': 20, 'value_right': 20,
-                               'stamp': 3, 'stamp_': 4}),
-                        Record({'value_left': 30, 'value_right': 30,
-                               'stamp': 5, 'stamp_': 6}),
-                        Record({'value_left': 30, 'value_right': 30,
-                               'stamp': 5, 'stamp_': 6}),
-                        Record({'value_left': 70, 'value_right': 70,
-                               'stamp': 9, 'stamp_': 11}),
-                        Record({'value_left': 70, 'value_right': 70,
-                               'stamp': 10, 'stamp_': 11}),
-                        Record({'value_left': 40, 'stamp': 7}),
-                    ],
-                    [
-                        ColumnValue('stamp'),
-                        ColumnValue('value_left'),
-                        ColumnValue('stamp_'),
-                        ColumnValue('value_right'),
-                    ]
-                ),
-            ),
-            (
-                'right',
-                Records(
-                    [
-                        Record({'value_left': 10, 'value_right': 10,
-                               'stamp': 1, 'stamp_': 2}),
-                        Record({'value_left': 20, 'value_right': 20,
-                               'stamp': 3, 'stamp_': 4}),
-                        Record({'value_left': 30, 'value_right': 30,
-                               'stamp': 5, 'stamp_': 6}),
-                        Record({'value_left': 30, 'value_right': 30,
-                               'stamp': 5, 'stamp_': 6}),
-                        Record({'value_left': 70, 'value_right': 70,
-                               'stamp': 9, 'stamp_': 11}),
-                        Record({'value_left': 70, 'value_right': 70,
-                               'stamp': 10, 'stamp_': 11}),
-                        Record({'value_right': 50, 'stamp_': 10}),
-                    ],
-                    [
-                        ColumnValue('stamp'),
-                        ColumnValue('value_left'),
-                        ColumnValue('stamp_'),
-                        ColumnValue('value_right'),
-                    ]
-                ),
-            ),
-            (
-                'outer',
-                Records(
-                    [
-                        Record({'value_left': 10, 'value_right': 10,
-                               'stamp': 1, 'stamp_': 2}),
-                        Record({'value_left': 20, 'value_right': 20,
-                               'stamp': 3, 'stamp_': 4}),
-                        Record({'value_left': 30, 'value_right': 30,
-                               'stamp': 5, 'stamp_': 6}),
-                        Record({'value_left': 30, 'value_right': 30,
-                               'stamp': 5, 'stamp_': 6}),
-                        Record({'value_left': 70, 'value_right': 70,
-                               'stamp': 9, 'stamp_': 11}),
-                        Record({'value_left': 70, 'value_right': 70,
-                               'stamp': 10, 'stamp_': 11}),
-                        Record({'value_left': 40, 'stamp': 7}),
-                        Record({'value_right': 50, 'stamp_': 10}),
-                    ],
-                    [
-                        ColumnValue('stamp'),
-                        ColumnValue('value_left'),
-                        ColumnValue('stamp_'),
-                        ColumnValue('value_right'),
-                    ]
-                ),
-            ),
-        ],
-    )
-    def test_merge(self, how: str, records_expect_py: Records):
-        records_left_py: Records = Records(
+    class TestMerge:
+        @pytest.mark.parametrize(
+            'how, records_expect_py',
             [
-                Record({'stamp': 1, 'value_left': 10}),
-                Record({'stamp': 3, 'value_left': 20}),
-                Record({'stamp': 5, 'value_left': 30}),
-                Record({'stamp': 7, 'value_left': 40}),
-                Record({'stamp': 9, 'value_left': 70}),
-                Record({'stamp': 10, 'value_left': 70}),
-            ],
-            [ColumnValue('stamp'), ColumnValue('value_left')]
-        )
-
-        records_right_py: Records = Records(
-            [
-                Record({'stamp_': 2, 'value_right': 10}),
-                Record({'stamp_': 4, 'value_right': 20}),
-                Record({'stamp_': 6, 'value_right': 30}),
-                Record({'stamp_': 6, 'value_right': 30}),
-                Record({'stamp_': 10, 'value_right': 50}),
-                Record({'stamp_': 11, 'value_right': 70}),
-            ],
-            [ColumnValue('stamp_'), ColumnValue('value_right')]
-        )
-
-        records_left_cpp = to_cpp_records(records_left_py)
-        records_right_cpp = to_cpp_records(records_right_py)
-        records_expect_cpp = to_cpp_records(records_expect_py)
-
-        for records_left, records_right, records_expect in zip(
-            [records_left_py, records_left_cpp],
-            [records_right_py, records_right_cpp],
-            [records_expect_py, records_expect_cpp],
-        ):
-            if records_left is None or records_right is None:
-                continue
-
-            columns = ['stamp', 'value_left', 'stamp_', 'value_right']
-            merged = records_left.merge(
-                records_right, 'value_left', 'value_right', columns, how=how)
-
-            assert merged.equals(records_expect) is True  # type: ignore
-            assert records_left.columns == [
-                'stamp', 'value_left']  # type: ignore
-            assert records_right.columns == [
-                'stamp_', 'value_right']  # type: ignore
-
-    @pytest.mark.parametrize(
-        'how, expect_records_py',
-        [
-            (
-                'inner',
-                Records(
-                    [
-                        Record(
-                            {
-                                'other_stamp': 4,
-                                'other_stamp_': 6,
-                                'stamp': 1,
-                                'stamp_': 7,
-                                'value_left': 1,
-                                'value_right': 1,
-                            }
-                        ),
-                        Record(
-                            {
-                                'other_stamp': 12,
-                                'other_stamp_': 2,
-                                'stamp': 9,
-                                'stamp_': 3,
-                                'value_left': 2,
-                                'value_right': 2,
-                            }
-                        ),
-                    ],
-                    [
-                        ColumnValue('other_stamp'),
-                        ColumnValue('other_stamp_'),
-                        ColumnValue('stamp'),
-                        ColumnValue('stamp_'),
-                        ColumnValue('value_left'),
-                        ColumnValue('value_right'),
-                    ]
+                (
+                    'inner',
+                    Records(
+                        [
+                            Record({'value_left': 10, 'value_right': 10,
+                                'stamp': 1, 'stamp_': 2}),
+                            Record({'value_left': 20, 'value_right': 20,
+                                'stamp': 3, 'stamp_': 4}),
+                            Record({'value_left': 30, 'value_right': 30,
+                                'stamp': 5, 'stamp_': 6}),
+                            Record({'value_left': 30, 'value_right': 30,
+                                'stamp': 5, 'stamp_': 6}),
+                            Record({'value_left': 70, 'value_right': 70,
+                                'stamp': 9, 'stamp_': 11}),
+                            Record({'value_left': 70, 'value_right': 70,
+                                'stamp': 10, 'stamp_': 11}),
+                        ],
+                        [
+                            ColumnValue('stamp'),
+                            ColumnValue('value_left'),
+                            ColumnValue('stamp_'),
+                            ColumnValue('value_right'),
+                        ]
+                    ),
                 ),
-            ),
-            (
-                'left',
-                Records(
-                    [
-                        Record(
-                            {
-                                'other_stamp': 4,
-                                'other_stamp_': 6,
-                                'stamp': 1,
-                                'stamp_': 7,
-                                'value_left': 1,
-                                'value_right': 1,
-                            }
-                        ),
-                        Record(
-                            {
-                                'other_stamp': 12,
-                                'other_stamp_': 2,
-                                'stamp': 9,
-                                'stamp_': 3,
-                                'value_left': 2,
-                                'value_right': 2,
-                            }
-                        ),
-                        Record({'other_stamp': 8}),
-                        Record({'other_stamp': 16}),
-                    ],
-                    [
-                        ColumnValue('other_stamp'),
-                        ColumnValue('other_stamp_'),
-                        ColumnValue('stamp'),
-                        ColumnValue('stamp_'),
-                        ColumnValue('value_left'),
-                        ColumnValue('value_right'),
-                    ]
+                (
+                    'left',
+                    Records(
+                        [
+                            Record({'value_left': 10, 'value_right': 10,
+                                'stamp': 1, 'stamp_': 2}),
+                            Record({'value_left': 20, 'value_right': 20,
+                                'stamp': 3, 'stamp_': 4}),
+                            Record({'value_left': 30, 'value_right': 30,
+                                'stamp': 5, 'stamp_': 6}),
+                            Record({'value_left': 30, 'value_right': 30,
+                                'stamp': 5, 'stamp_': 6}),
+                            Record({'value_left': 70, 'value_right': 70,
+                                'stamp': 9, 'stamp_': 11}),
+                            Record({'value_left': 70, 'value_right': 70,
+                                'stamp': 10, 'stamp_': 11}),
+                            Record({'value_left': 40, 'stamp': 7}),
+                        ],
+                        [
+                            ColumnValue('stamp'),
+                            ColumnValue('value_left'),
+                            ColumnValue('stamp_'),
+                            ColumnValue('value_right'),
+                        ]
+                    ),
                 ),
-            ),
-            (
-                'right',
-                Records(
-                    [
-                        Record(
-                            {
-                                'other_stamp': 4,
-                                'other_stamp_': 6,
-                                'stamp': 1,
-                                'stamp_': 7,
-                                'value_left': 1,
-                                'value_right': 1,
-                            }
-                        ),
-                        Record(
-                            {
-                                'other_stamp': 12,
-                                'other_stamp_': 2,
-                                'stamp': 9,
-                                'stamp_': 3,
-                                'value_left': 2,
-                                'value_right': 2,
-                            }
-                        ),
-                        Record({'other_stamp_': 10}),
-                        Record({'other_stamp_': 14}),
-                    ],
-                    [
-                        ColumnValue('other_stamp'),
-                        ColumnValue('other_stamp_'),
-                        ColumnValue('stamp'),
-                        ColumnValue('stamp_'),
-                        ColumnValue('value_left'),
-                        ColumnValue('value_right'),
-                    ]
+                (
+                    'right',
+                    Records(
+                        [
+                            Record({'value_left': 10, 'value_right': 10,
+                                'stamp': 1, 'stamp_': 2}),
+                            Record({'value_left': 20, 'value_right': 20,
+                                'stamp': 3, 'stamp_': 4}),
+                            Record({'value_left': 30, 'value_right': 30,
+                                'stamp': 5, 'stamp_': 6}),
+                            Record({'value_left': 30, 'value_right': 30,
+                                'stamp': 5, 'stamp_': 6}),
+                            Record({'value_left': 70, 'value_right': 70,
+                                'stamp': 9, 'stamp_': 11}),
+                            Record({'value_left': 70, 'value_right': 70,
+                                'stamp': 10, 'stamp_': 11}),
+                            Record({'value_right': 50, 'stamp_': 10}),
+                        ],
+                        [
+                            ColumnValue('stamp'),
+                            ColumnValue('value_left'),
+                            ColumnValue('stamp_'),
+                            ColumnValue('value_right'),
+                        ]
+                    ),
                 ),
-            ),
-            (
-                'outer',
-                Records(
-                    [
-                        Record(
-                            {
-                                'other_stamp': 4,
-                                'other_stamp_': 6,
-                                'stamp': 1,
-                                'stamp_': 7,
-                                'value_left': 1,
-                                'value_right': 1,
-                            }
-                        ),
-                        Record(
-                            {
-                                'other_stamp': 12,
-                                'other_stamp_': 2,
-                                'stamp': 9,
-                                'stamp_': 3,
-                                'value_left': 2,
-                                'value_right': 2,
-                            }
-                        ),
-                        Record({'other_stamp': 8}),
-                        Record({'other_stamp': 16}),
-                        Record({'other_stamp_': 10}),
-                        Record({'other_stamp_': 14}),
-                    ],
-                    [
-                        ColumnValue('other_stamp'),
-                        ColumnValue('other_stamp_'),
-                        ColumnValue('stamp'),
-                        ColumnValue('stamp_'),
-                        ColumnValue('value_left'),
-                        ColumnValue('value_right'),
-                    ]
+                (
+                    'outer',
+                    Records(
+                        [
+                            Record({'value_left': 10, 'value_right': 10,
+                                'stamp': 1, 'stamp_': 2}),
+                            Record({'value_left': 20, 'value_right': 20,
+                                'stamp': 3, 'stamp_': 4}),
+                            Record({'value_left': 30, 'value_right': 30,
+                                'stamp': 5, 'stamp_': 6}),
+                            Record({'value_left': 30, 'value_right': 30,
+                                'stamp': 5, 'stamp_': 6}),
+                            Record({'value_left': 70, 'value_right': 70,
+                                'stamp': 9, 'stamp_': 11}),
+                            Record({'value_left': 70, 'value_right': 70,
+                                'stamp': 10, 'stamp_': 11}),
+                            Record({'value_left': 40, 'stamp': 7}),
+                            Record({'value_right': 50, 'stamp_': 10}),
+                        ],
+                        [
+                            ColumnValue('stamp'),
+                            ColumnValue('value_left'),
+                            ColumnValue('stamp_'),
+                            ColumnValue('value_right'),
+                        ]
+                    ),
                 ),
-            ),
-        ],
-    )
-    def test_merge_with_loss(self, how, expect_records_py):
-        left_records_py = Records(
-            [
-                Record({'other_stamp': 4, 'stamp': 1, 'value_left': 1}),
-                Record({'other_stamp': 8}),
-                Record({'other_stamp': 12, 'stamp': 9, 'value_left': 2}),
-                Record({'other_stamp': 16}),
             ],
-            [ColumnValue('other_stamp'), ColumnValue('stamp'), ColumnValue('value_left')]
         )
-
-        right_records_py = Records(
-            [
-                Record({'other_stamp_': 2, 'stamp_': 3, 'value_right': 2}),
-                Record({'other_stamp_': 6, 'stamp_': 7, 'value_right': 1}),
-                Record({'other_stamp_': 10}),
-                Record({'other_stamp_': 14}),
-            ],
-            [ColumnValue('other_stamp_'), ColumnValue('stamp_'), ColumnValue('value_right')]
-        )
-
-        left_records_cpp = to_cpp_records(left_records_py)
-        right_records_cpp = to_cpp_records(right_records_py)
-        expect_records_cpp = to_cpp_records(expect_records_py)
-
-        for left_records, right_records, expect_records in zip(
-            [left_records_py, left_records_cpp],
-            [right_records_py, right_records_cpp],
-            [expect_records_py, expect_records_cpp],
-        ):
-            if left_records is None and not CppImplEnabled:
-                continue
-
-            merged = merge(
-                left_records=left_records,
-                right_records=right_records,
-                join_left_key='value_left',
-                join_right_key='value_right',
-                columns=['other_stamp', 'other_stamp_', 'stamp',
-                         'stamp_', 'value_left', 'value_right'],
-                how=how
+        def test_merge(self, how: str, records_expect_py: Records):
+            records_left_py: Records = Records(
+                [
+                    Record({'stamp': 1, 'value_left': 10}),
+                    Record({'stamp': 3, 'value_left': 20}),
+                    Record({'stamp': 5, 'value_left': 30}),
+                    Record({'stamp': 7, 'value_left': 40}),
+                    Record({'stamp': 9, 'value_left': 70}),
+                    Record({'stamp': 10, 'value_left': 70}),
+                ],
+                [ColumnValue('stamp'), ColumnValue('value_left')]
             )
 
-            assert merged.equals(expect_records) is True
-
-    @pytest.mark.parametrize(
-        'how, expect_records_py',
-        [
-            (
-                'inner',
-                Records(
-                    [
-                        Record({'key_left': 1, 'key_right': 1, 'stamp': 0, 'sub_stamp': 3}),
-                        Record({'key_left': 2, 'key_right': 2, 'stamp': 1, 'sub_stamp': 2}),
-                    ],
-                    [
-                        ColumnValue('key_left'),
-                        ColumnValue('stamp'),
-                        ColumnValue('key_right'),
-                        ColumnValue('sub_stamp'),
-                    ]
-                ),
-            ),
-            (
-                'left',
-                Records(
-                    [
-                        Record({'key_left': 1, 'key_right': 1, 'stamp': 0, 'sub_stamp': 3}),
-                        Record({'key_left': 2, 'key_right': 2, 'stamp': 1, 'sub_stamp': 2}),
-                        Record({'key_left': 1, 'stamp': 6}),
-                        Record({'key_left': 2, 'stamp': 7}),
-                    ],
-                    [
-                        ColumnValue('key_left'),
-                        ColumnValue('stamp'),
-                        ColumnValue('key_right'),
-                        ColumnValue('sub_stamp'),
-                    ]
-                ),
-            ),
-            (
-                'left_use_latest',
-                Records(
-                    [
-                        Record({'key_left': 1, 'key_right': 1, 'stamp': 0, 'sub_stamp': 3}),
-                        Record({'key_left': 1, 'key_right': 1, 'stamp': 0, 'sub_stamp': 4}),
-                        Record({'key_left': 2, 'key_right': 2, 'stamp': 1, 'sub_stamp': 2}),
-                        Record({'key_left': 2, 'key_right': 2, 'stamp': 1, 'sub_stamp': 5}),
-                        Record({'key_left': 1, 'stamp': 6}),
-                        Record({'key_left': 2, 'stamp': 7}),
-                    ],
-                    [
-                        ColumnValue('key_left'),
-                        ColumnValue('stamp'),
-                        ColumnValue('key_right'),
-                        ColumnValue('sub_stamp'),
-                    ]
-                ),
-            ),
-            (
-                'right',
-                Records(
-                    [
-                        Record({'key_left': 1, 'key_right': 1, 'stamp': 0, 'sub_stamp': 3}),
-                        Record({'key_left': 2, 'key_right': 2, 'stamp': 1, 'sub_stamp': 2}),
-                        Record({'key_right': 1, 'sub_stamp': 4}),
-                        Record({'key_right': 2, 'sub_stamp': 5}),
-                    ],
-                    [
-                        ColumnValue('key_left'),
-                        ColumnValue('stamp'),
-                        ColumnValue('key_right'),
-                        ColumnValue('sub_stamp'),
-                    ]
-                ),
-            ),
-            (
-                'outer',
-                Records(
-                    [
-                        Record({'key_left': 1, 'key_right': 1, 'stamp': 0, 'sub_stamp': 3}),
-                        Record({'key_left': 2, 'key_right': 2, 'stamp': 1, 'sub_stamp': 2}),
-                        Record({'key_right': 1, 'sub_stamp': 4}),
-                        Record({'key_right': 2, 'sub_stamp': 5}),
-                        Record({'key_left': 1, 'stamp': 6}),
-                        Record({'key_left': 2, 'stamp': 7}),
-                    ],
-                    [
-                        ColumnValue('key_left'),
-                        ColumnValue('stamp'),
-                        ColumnValue('key_right'),
-                        ColumnValue('sub_stamp'),
-                    ]
-                ),
-            ),
-        ],
-    )
-    def test_merge_sequential_with_key(self, how, expect_records_py):
-        left_records_py: Records = Records(
-            [
-                Record({'key_left': 1, 'stamp': 0}),
-                Record({'key_left': 2, 'stamp': 1}),
-                Record({'key_left': 1, 'stamp': 6}),
-                Record({'key_left': 2, 'stamp': 7}),
-            ],
-            [ColumnValue('key_left'), ColumnValue('stamp')]
-        )
-
-        right_records_py: Records = Records(
-            [
-                Record({'key_right': 2, 'sub_stamp': 2}),
-                Record({'key_right': 1, 'sub_stamp': 3}),
-                Record({'key_right': 1, 'sub_stamp': 4}),
-                Record({'key_right': 2, 'sub_stamp': 5}),
-            ],
-            [ColumnValue('key_right'), ColumnValue('sub_stamp')]
-        )
-
-        for left_records, right_records, expect_records in zip(
-            [left_records_py, to_cpp_records(left_records_py)],
-            [right_records_py, to_cpp_records(right_records_py)],
-            [expect_records_py, to_cpp_records(expect_records_py)],
-        ):
-            if left_records is None and not CppImplEnabled:
-                continue
-
-            merged_records = left_records.merge_sequential(
-                right_records=right_records,
-                left_stamp_key='stamp',
-                right_stamp_key='sub_stamp',
-                join_left_key='key_left',
-                join_right_key='key_right',
-                columns=['key_left', 'stamp', 'key_right', 'sub_stamp'],
-                how=how,
+            records_right_py: Records = Records(
+                [
+                    Record({'stamp_': 2, 'value_right': 10}),
+                    Record({'stamp_': 4, 'value_right': 20}),
+                    Record({'stamp_': 6, 'value_right': 30}),
+                    Record({'stamp_': 6, 'value_right': 30}),
+                    Record({'stamp_': 10, 'value_right': 50}),
+                    Record({'stamp_': 11, 'value_right': 70}),
+                ],
+                [ColumnValue('stamp_'), ColumnValue('value_right')]
             )
 
-            assert merged_records.equals(expect_records)
+            records_left_cpp = to_cpp_records(records_left_py)
+            records_right_cpp = to_cpp_records(records_right_py)
+            records_expect_cpp = to_cpp_records(records_expect_py)
 
-    @pytest.mark.parametrize(
-        'how, expect_records_py',
-        [
-            (
-                'inner',
-                Records(
-                    [
-                        Record({'key': 1, 'stamp': 0, 'sub_stamp': 3}),
-                        Record({'key': 2, 'stamp': 1, 'sub_stamp': 2}),
-                    ],
-                    [ColumnValue('key'), ColumnValue('stamp'), ColumnValue('sub_stamp')]
-                ),
-            ),
-            (
-                'left',
-                Records(
-                    [
-                        Record({'key': 1, 'stamp': 0, 'sub_stamp': 3}),
-                        Record({'key': 2, 'stamp': 1, 'sub_stamp': 2}),
-                        Record({'key': 1, 'stamp': 6}),
-                        Record({'key': 2, 'stamp': 7}),
-                    ],
-                    [ColumnValue('key'), ColumnValue('stamp'), ColumnValue('sub_stamp')]
-                ),
-            ),
-            (
-                'left_use_latest',
-                Records(
-                    [
-                        Record({'key': 1, 'stamp': 0, 'sub_stamp': 3}),
-                        Record({'key': 1, 'stamp': 0, 'sub_stamp': 4}),
-                        Record({'key': 2, 'stamp': 1, 'sub_stamp': 2}),
-                        Record({'key': 2, 'stamp': 1, 'sub_stamp': 5}),
-                        Record({'key': 1, 'stamp': 6}),
-                        Record({'key': 2, 'stamp': 7}),
-                    ],
-                    [ColumnValue('key'), ColumnValue('stamp'), ColumnValue('sub_stamp')]
-                ),
-            ),
-            (
-                'right',
-                Records(
-                    [
-                        Record({'key': 1, 'stamp': 0, 'sub_stamp': 3}),
-                        Record({'key': 2, 'stamp': 1, 'sub_stamp': 2}),
-                        Record({'key': 1, 'sub_stamp': 4}),
-                        Record({'key': 2, 'sub_stamp': 5}),
-                    ],
-                    [ColumnValue('key'), ColumnValue('stamp'), ColumnValue('sub_stamp')]
-                ),
-            ),
-            (
-                'outer',
-                Records(
-                    [
-                        Record({'key': 1, 'stamp': 0, 'sub_stamp': 3}),
-                        Record({'key': 2, 'stamp': 1, 'sub_stamp': 2}),
-                        Record({'key': 1, 'sub_stamp': 4}),
-                        Record({'key': 2, 'sub_stamp': 5}),
-                        Record({'key': 1, 'stamp': 6}),
-                        Record({'key': 2, 'stamp': 7}),
-                    ],
-                    [ColumnValue('key'), ColumnValue('stamp'), ColumnValue('sub_stamp')]
-                ),
-            ),
-        ],
-    )
-    def test_merge_sequential_with_same_key(self, how, expect_records_py):
-        left_records_py: Records = Records(
+            for records_left, records_right, records_expect in zip(
+                [records_left_py, records_left_cpp],
+                [records_right_py, records_right_cpp],
+                [records_expect_py, records_expect_cpp],
+            ):
+                if records_left is None or records_right is None:
+                    continue
+
+                columns = ['stamp', 'value_left', 'stamp_', 'value_right']
+                merged = records_left.merge(
+                    records_right, 'value_left', 'value_right', columns, how=how)
+
+                assert merged.equals(records_expect) is True  # type: ignore
+                assert records_left.columns == [
+                    'stamp', 'value_left']  # type: ignore
+                assert records_right.columns == [
+                    'stamp_', 'value_right']  # type: ignore
+
+        @pytest.mark.parametrize(
+            'how, expect_records_py',
             [
-                Record({'key': 1, 'stamp': 0}),
-                Record({'key': 2, 'stamp': 1}),
-                Record({'key': 1, 'stamp': 6}),
-                Record({'key': 2, 'stamp': 7}),
+                (
+                    'inner',
+                    Records(
+                        [
+                            Record(
+                                {
+                                    'other_stamp': 4,
+                                    'other_stamp_': 6,
+                                    'stamp': 1,
+                                    'stamp_': 7,
+                                    'value_left': 1,
+                                    'value_right': 1,
+                                }
+                            ),
+                            Record(
+                                {
+                                    'other_stamp': 12,
+                                    'other_stamp_': 2,
+                                    'stamp': 9,
+                                    'stamp_': 3,
+                                    'value_left': 2,
+                                    'value_right': 2,
+                                }
+                            ),
+                        ],
+                        [
+                            ColumnValue('other_stamp'),
+                            ColumnValue('other_stamp_'),
+                            ColumnValue('stamp'),
+                            ColumnValue('stamp_'),
+                            ColumnValue('value_left'),
+                            ColumnValue('value_right'),
+                        ]
+                    ),
+                ),
+                (
+                    'left',
+                    Records(
+                        [
+                            Record(
+                                {
+                                    'other_stamp': 4,
+                                    'other_stamp_': 6,
+                                    'stamp': 1,
+                                    'stamp_': 7,
+                                    'value_left': 1,
+                                    'value_right': 1,
+                                }
+                            ),
+                            Record(
+                                {
+                                    'other_stamp': 12,
+                                    'other_stamp_': 2,
+                                    'stamp': 9,
+                                    'stamp_': 3,
+                                    'value_left': 2,
+                                    'value_right': 2,
+                                }
+                            ),
+                            Record({'other_stamp': 8}),
+                            Record({'other_stamp': 16}),
+                        ],
+                        [
+                            ColumnValue('other_stamp'),
+                            ColumnValue('other_stamp_'),
+                            ColumnValue('stamp'),
+                            ColumnValue('stamp_'),
+                            ColumnValue('value_left'),
+                            ColumnValue('value_right'),
+                        ]
+                    ),
+                ),
+                (
+                    'right',
+                    Records(
+                        [
+                            Record(
+                                {
+                                    'other_stamp': 4,
+                                    'other_stamp_': 6,
+                                    'stamp': 1,
+                                    'stamp_': 7,
+                                    'value_left': 1,
+                                    'value_right': 1,
+                                }
+                            ),
+                            Record(
+                                {
+                                    'other_stamp': 12,
+                                    'other_stamp_': 2,
+                                    'stamp': 9,
+                                    'stamp_': 3,
+                                    'value_left': 2,
+                                    'value_right': 2,
+                                }
+                            ),
+                            Record({'other_stamp_': 10}),
+                            Record({'other_stamp_': 14}),
+                        ],
+                        [
+                            ColumnValue('other_stamp'),
+                            ColumnValue('other_stamp_'),
+                            ColumnValue('stamp'),
+                            ColumnValue('stamp_'),
+                            ColumnValue('value_left'),
+                            ColumnValue('value_right'),
+                        ]
+                    ),
+                ),
+                (
+                    'outer',
+                    Records(
+                        [
+                            Record(
+                                {
+                                    'other_stamp': 4,
+                                    'other_stamp_': 6,
+                                    'stamp': 1,
+                                    'stamp_': 7,
+                                    'value_left': 1,
+                                    'value_right': 1,
+                                }
+                            ),
+                            Record(
+                                {
+                                    'other_stamp': 12,
+                                    'other_stamp_': 2,
+                                    'stamp': 9,
+                                    'stamp_': 3,
+                                    'value_left': 2,
+                                    'value_right': 2,
+                                }
+                            ),
+                            Record({'other_stamp': 8}),
+                            Record({'other_stamp': 16}),
+                            Record({'other_stamp_': 10}),
+                            Record({'other_stamp_': 14}),
+                        ],
+                        [
+                            ColumnValue('other_stamp'),
+                            ColumnValue('other_stamp_'),
+                            ColumnValue('stamp'),
+                            ColumnValue('stamp_'),
+                            ColumnValue('value_left'),
+                            ColumnValue('value_right'),
+                        ]
+                    ),
+                ),
             ],
-            [ColumnValue('key'), ColumnValue('stamp')]
         )
-
-        right_records_py: Records = Records(
-            [
-                Record({'key': 2, 'sub_stamp': 2}),
-                Record({'key': 1, 'sub_stamp': 3}),
-                Record({'key': 1, 'sub_stamp': 4}),
-                Record({'key': 2, 'sub_stamp': 5}),
-            ],
-            [ColumnValue('key'), ColumnValue('sub_stamp')]
-        )
-
-        for left_records, right_records, expect_records in zip(
-            [left_records_py, to_cpp_records(left_records_py)],
-            [right_records_py, to_cpp_records(right_records_py)],
-            [expect_records_py, to_cpp_records(expect_records_py)],
-        ):
-            if left_records is None and not CppImplEnabled:
-                continue
-
-            merged_records = left_records.merge_sequential(
-                right_records=right_records,
-                left_stamp_key='stamp',
-                right_stamp_key='sub_stamp',
-                join_left_key='key',
-                join_right_key='key',
-                columns=['key', 'stamp', 'sub_stamp'],
-                how=how,
+        def test_merge_with_loss(self, how, expect_records_py):
+            left_records_py = Records(
+                [
+                    Record({'other_stamp': 4, 'stamp': 1, 'value_left': 1}),
+                    Record({'other_stamp': 8}),
+                    Record({'other_stamp': 12, 'stamp': 9, 'value_left': 2}),
+                    Record({'other_stamp': 16}),
+                ],
+                [ColumnValue('other_stamp'), ColumnValue('stamp'), ColumnValue('value_left')]
             )
 
-            assert merged_records.equals(expect_records)
-
-    @pytest.mark.parametrize(
-        'how, expect_records_py',
-        [
-            (
-                'inner',
-                Records(
-                    [
-                        Record({'stamp': 0, 'sub_stamp': 1}),
-                        Record({'stamp': 5, 'sub_stamp': 6}),
-                    ],
-                    [ColumnValue('stamp'), ColumnValue('sub_stamp')]
-                ),
-            ),
-            (
-                'left',
-                Records(
-                    [
-                        Record({'stamp': 0, 'sub_stamp': 1}),
-                        Record({'stamp': 3}),
-                        Record({'stamp': 4}),
-                        Record({'stamp': 5, 'sub_stamp': 6}),
-                        Record({'stamp': 8}),
-                    ],
-                    [ColumnValue('stamp'), ColumnValue('sub_stamp')]
-                ),
-            ),
-            (
-                'left_use_latest',
-                Records(
-                    [
-                        Record({'stamp': 0, 'sub_stamp': 1}),
-                        Record({'stamp': 3}),
-                        Record({'stamp': 4}),
-                        Record({'stamp': 5, 'sub_stamp': 6}),
-                        Record({'stamp': 5, 'sub_stamp': 7}),
-                        Record({'stamp': 8}),
-                    ],
-                    [ColumnValue('stamp'), ColumnValue('sub_stamp')]
-                ),
-            ),
-            (
-                'right',
-                Records(
-                    [
-                        Record({'stamp': 0, 'sub_stamp': 1}),
-                        Record({'stamp': 5, 'sub_stamp': 6}),
-                        Record({'sub_stamp': 7}),
-                    ],
-                    [ColumnValue('stamp'), ColumnValue('sub_stamp')]
-                ),
-            ),
-            (
-                'outer',
-                Records(
-                    [
-                        Record({'stamp': 0, 'sub_stamp': 1}),
-                        Record({'stamp': 3}),
-                        Record({'stamp': 4}),
-                        Record({'stamp': 5, 'sub_stamp': 6}),
-                        Record({'sub_stamp': 7}),
-                        Record({'stamp': 8}),
-                    ],
-                    [ColumnValue('stamp'), ColumnValue('sub_stamp')]
-                ),
-            ),
-        ],
-    )
-    def test_merge_sequential_without_key(self, how, expect_records_py):
-        left_records_py: Records = Records(
-            [
-                Record({'stamp': 0}),
-                Record({'stamp': 3}),
-                Record({'stamp': 4}),
-                Record({'stamp': 5}),
-                Record({'stamp': 8}),
-            ],
-            [ColumnValue('stamp')]
-        )
-
-        right_records_py: Records = Records(
-            [
-                Record({'sub_stamp': 1}),
-                Record({'sub_stamp': 6}),
-                Record({'sub_stamp': 7}),
-            ],
-            [ColumnValue('sub_stamp')]
-        )
-
-        for left_records, right_records, expect_records in zip(
-            [left_records_py, to_cpp_records(left_records_py)],
-            [right_records_py, to_cpp_records(right_records_py)],
-            [expect_records_py, to_cpp_records(expect_records_py)],
-        ):
-            if left_records is None and not CppImplEnabled:
-                continue
-
-            merged = left_records.merge_sequential(
-                right_records=right_records,
-                left_stamp_key='stamp',
-                right_stamp_key='sub_stamp',
-                join_left_key=None,
-                join_right_key=None,
-                columns=['stamp', 'sub_stamp'],
-                how=how,
+            right_records_py = Records(
+                [
+                    Record({'other_stamp_': 2, 'stamp_': 3, 'value_right': 2}),
+                    Record({'other_stamp_': 6, 'stamp_': 7, 'value_right': 1}),
+                    Record({'other_stamp_': 10}),
+                    Record({'other_stamp_': 14}),
+                ],
+                [ColumnValue('other_stamp_'), ColumnValue('stamp_'), ColumnValue('value_right')]
             )
 
-            assert merged.equals(expect_records)
+            left_records_cpp = to_cpp_records(left_records_py)
+            right_records_cpp = to_cpp_records(right_records_py)
+            expect_records_cpp = to_cpp_records(expect_records_py)
 
-    @pytest.mark.parametrize(
-        'how, expect_records_py',
-        [
-            (
-                'inner',
-                Records(
-                    [
-                        Record({'key_left': 1, 'key_right': 1, 'stamp': 0, 'sub_stamp': 2}),
-                        Record({'key_left': 1, 'key_right': 1, 'stamp': 6, 'sub_stamp': 7}),
-                    ],
-                    [
-                        ColumnValue('key_left'),
-                        ColumnValue('stamp'),
-                        ColumnValue('key_right'),
-                        ColumnValue('sub_stamp'),
-                    ]
-                ),
-            ),
-            (
-                'left',
-                Records(
-                    [
-                        Record({'key_left': 1, 'key_right': 1, 'stamp': 0, 'sub_stamp': 2}),
-                        Record({'key_left': 1, 'stamp': 4}),
-                        Record({'key_left': 1, 'stamp': 5}),
-                        Record({'key_left': 1, 'key_right': 1, 'stamp': 6, 'sub_stamp': 7}),
-                    ],
-                    [
-                        ColumnValue('key_left'),
-                        ColumnValue('stamp'),
-                        ColumnValue('key_right'),
-                        ColumnValue('sub_stamp'),
-                    ]
-                ),
-            ),
-            (
-                'left_use_latest',
-                Records(
-                    [
-                        Record({'key_left': 1, 'key_right': 1,
-                               'stamp': 0, 'sub_stamp': 2}),
-                        Record({'key_left': 1, 'key_right': 1,
-                               'stamp': 0, 'sub_stamp': 3}),
-                        Record({'key_left': 1, 'stamp': 4}),
-                        Record({'key_left': 1, 'stamp': 5}),
-                        Record({'key_left': 1, 'key_right': 1,
-                               'stamp': 6, 'sub_stamp': 7}),
-                    ],
-                    [
-                        ColumnValue('key_left'),
-                        ColumnValue('stamp'),
-                        ColumnValue('key_right'),
-                        ColumnValue('sub_stamp'),
-                    ]
-                ),
-            ),
-            (
-                'right',
-                Records(
-                    [
-                        Record({'key_left': 1, 'key_right': 1, 'stamp': 0, 'sub_stamp': 2}),
-                        Record({'key_right': 3, 'sub_stamp': 1}),
-                        Record({'key_right': 1, 'sub_stamp': 3}),
-                        Record({'key_left': 1, 'key_right': 1, 'stamp': 6, 'sub_stamp': 7}),
-                    ],
-                    [
-                        ColumnValue('key_left'),
-                        ColumnValue('stamp'),
-                        ColumnValue('key_right'),
-                        ColumnValue('sub_stamp'),
-                    ]
-                ),
-            ),
-            (
-                'outer',
-                Records(
-                    [
-                        Record({'key_left': 1, 'key_right': 1, 'stamp': 0, 'sub_stamp': 2}),
-                        Record({'key_right': 3, 'sub_stamp': 1}),
-                        Record({'key_right': 1, 'sub_stamp': 3}),
-                        Record({'key_left': 1, 'stamp': 4}),
-                        Record({'key_left': 1, 'stamp': 5}),
-                        Record({'key_left': 1, 'key_right': 1, 'stamp': 6, 'sub_stamp': 7}),
-                    ],
-                    [
-                        ColumnValue('key_left'),
-                        ColumnValue('stamp'),
-                        ColumnValue('key_right'),
-                        ColumnValue('sub_stamp'),
-                    ]
-                ),
-            ),
-        ],
-    )
-    def test_merge_sequential_with_drop(self, how, expect_records_py):
-        left_records_py: Records = Records(
+            for left_records, right_records, expect_records in zip(
+                [left_records_py, left_records_cpp],
+                [right_records_py, right_records_cpp],
+                [expect_records_py, expect_records_cpp],
+            ):
+                if left_records is None and not CppImplEnabled:
+                    continue
+
+                merged = merge(
+                    left_records=left_records,
+                    right_records=right_records,
+                    join_left_key='value_left',
+                    join_right_key='value_right',
+                    columns=['other_stamp', 'other_stamp_', 'stamp',
+                            'stamp_', 'value_left', 'value_right'],
+                    how=how
+                )
+
+                assert merged.equals(expect_records) is True
+
+    class TestMergeSequential:
+        @pytest.mark.parametrize(
+            'how, expect_records_py',
             [
-                Record({'key_left': 1, 'stamp': 0}),
-                Record({'key_left': 1, 'stamp': 4}),
-                Record({'key_left': 1, 'stamp': 5}),
-                Record({'key_left': 1, 'stamp': 6}),
+                (
+                    'inner',
+                    Records(
+                        [
+                            Record({'key_left': 1, 'key_right': 1, 'stamp': 0, 'sub_stamp': 3}),
+                            Record({'key_left': 2, 'key_right': 2, 'stamp': 1, 'sub_stamp': 2}),
+                        ],
+                        [
+                            ColumnValue('key_left'),
+                            ColumnValue('stamp'),
+                            ColumnValue('key_right'),
+                            ColumnValue('sub_stamp'),
+                        ]
+                    ),
+                ),
+                (
+                    'left',
+                    Records(
+                        [
+                            Record({'key_left': 1, 'key_right': 1, 'stamp': 0, 'sub_stamp': 3}),
+                            Record({'key_left': 2, 'key_right': 2, 'stamp': 1, 'sub_stamp': 2}),
+                            Record({'key_left': 1, 'stamp': 6}),
+                            Record({'key_left': 2, 'stamp': 7}),
+                        ],
+                        [
+                            ColumnValue('key_left'),
+                            ColumnValue('stamp'),
+                            ColumnValue('key_right'),
+                            ColumnValue('sub_stamp'),
+                        ]
+                    ),
+                ),
+                (
+                    'left_use_latest',
+                    Records(
+                        [
+                            Record({'key_left': 1, 'key_right': 1, 'stamp': 0, 'sub_stamp': 3}),
+                            Record({'key_left': 1, 'key_right': 1, 'stamp': 0, 'sub_stamp': 4}),
+                            Record({'key_left': 2, 'key_right': 2, 'stamp': 1, 'sub_stamp': 2}),
+                            Record({'key_left': 2, 'key_right': 2, 'stamp': 1, 'sub_stamp': 5}),
+                            Record({'key_left': 1, 'stamp': 6}),
+                            Record({'key_left': 2, 'stamp': 7}),
+                        ],
+                        [
+                            ColumnValue('key_left'),
+                            ColumnValue('stamp'),
+                            ColumnValue('key_right'),
+                            ColumnValue('sub_stamp'),
+                        ]
+                    ),
+                ),
+                (
+                    'right',
+                    Records(
+                        [
+                            Record({'key_left': 1, 'key_right': 1, 'stamp': 0, 'sub_stamp': 3}),
+                            Record({'key_left': 2, 'key_right': 2, 'stamp': 1, 'sub_stamp': 2}),
+                            Record({'key_right': 1, 'sub_stamp': 4}),
+                            Record({'key_right': 2, 'sub_stamp': 5}),
+                        ],
+                        [
+                            ColumnValue('key_left'),
+                            ColumnValue('stamp'),
+                            ColumnValue('key_right'),
+                            ColumnValue('sub_stamp'),
+                        ]
+                    ),
+                ),
+                (
+                    'outer',
+                    Records(
+                        [
+                            Record({'key_left': 1, 'key_right': 1, 'stamp': 0, 'sub_stamp': 3}),
+                            Record({'key_left': 2, 'key_right': 2, 'stamp': 1, 'sub_stamp': 2}),
+                            Record({'key_right': 1, 'sub_stamp': 4}),
+                            Record({'key_right': 2, 'sub_stamp': 5}),
+                            Record({'key_left': 1, 'stamp': 6}),
+                            Record({'key_left': 2, 'stamp': 7}),
+                        ],
+                        [
+                            ColumnValue('key_left'),
+                            ColumnValue('stamp'),
+                            ColumnValue('key_right'),
+                            ColumnValue('sub_stamp'),
+                        ]
+                    ),
+                ),
             ],
-            [ColumnValue('key_left'), ColumnValue('stamp')]
         )
-
-        right_records_py: Records = Records(
-            [
-                Record({'key_right': 3, 'sub_stamp': 1}),
-                Record({'key_right': 1, 'sub_stamp': 2}),
-                Record({'key_right': 1, 'sub_stamp': 3}),
-                Record({'key_right': 1, 'sub_stamp': 7}),
-            ],
-            [ColumnValue('key_right'), ColumnValue('sub_stamp')]
-        )
-
-        for left_records, right_records, expect_records in zip(
-            [left_records_py, to_cpp_records(left_records_py)],
-            [right_records_py, to_cpp_records(right_records_py)],
-            [expect_records_py, to_cpp_records(expect_records_py)],
-        ):
-            if left_records is None and not CppImplEnabled:
-                continue
-
-            merged = left_records.merge_sequential(
-                right_records=right_records,
-                left_stamp_key='stamp',
-                right_stamp_key='sub_stamp',
-                join_left_key='key_left',
-                join_right_key='key_right',
-                columns=['key_left', 'stamp', 'key_right', 'sub_stamp'],
-                how=how,
+        def test_use_join_key(self, how, expect_records_py):
+            left_records_py: Records = Records(
+                [
+                    Record({'key_left': 1, 'stamp': 0}),
+                    Record({'key_left': 2, 'stamp': 1}),
+                    Record({'key_left': 1, 'stamp': 6}),
+                    Record({'key_left': 2, 'stamp': 7}),
+                ],
+                [ColumnValue('key_left'), ColumnValue('stamp')]
             )
 
-            assert merged.equals(expect_records)
-
-    @pytest.mark.parametrize(
-        'how, expect_records_py',
-        [
-            (
-                'inner',
-                Records(
-                    [
-                        Record(
-                            {
-                                'other_stamp': 4,
-                                'other_stamp_': 2,
-                                'stamp': 1,
-                                'stamp_': 3,
-                                'value_left': 1,
-                                'value_right': 1,
-                            }
-                        ),
-                    ],
-                    [
-                        ColumnValue('other_stamp'),
-                        ColumnValue('stamp'),
-                        ColumnValue('value_left'),
-                        ColumnValue('other_stamp_'),
-                        ColumnValue('stamp_'),
-                        ColumnValue('value_right'),
-                    ]
-                ),
-            ),
-            (
-                'left',
-                Records(
-                    [
-                        Record(
-                            {
-                                'other_stamp': 4,
-                                'other_stamp_': 2,
-                                'stamp': 1,
-                                'stamp_': 3,
-                                'value_left': 1,
-                                'value_right': 1,
-                            }
-                        ),
-                        Record({'other_stamp': 12, 'stamp': 9, 'value_left': 1}),
-                        Record({'other_stamp': 8}),
-                        Record({'other_stamp': 16}),
-                    ],
-                    [
-                        ColumnValue('other_stamp'),
-                        ColumnValue('stamp'),
-                        ColumnValue('value_left'),
-                        ColumnValue('other_stamp_'),
-                        ColumnValue('stamp_'),
-                        ColumnValue('value_right'),
-                    ]
-                ),
-            ),
-            (
-                'left_use_latest',
-                Records(
-                    [
-                        Record(
-                            {
-                                'other_stamp': 4,
-                                'other_stamp_': 2,
-                                'stamp': 1,
-                                'stamp_': 3,
-                                'value_left': 1,
-                                'value_right': 1,
-                            }
-                        ),
-                        Record(
-                            {
-                                'other_stamp': 4,
-                                'other_stamp_': 6,
-                                'stamp': 1,
-                                'stamp_': 7,
-                                'value_left': 1,
-                                'value_right': 1,
-                            }
-                        ),
-                        Record({'other_stamp': 12, 'stamp': 9, 'value_left': 1}),
-                        Record({'other_stamp': 8}),
-                        Record({'other_stamp': 16}),
-                    ],
-                    [
-                        ColumnValue('other_stamp'),
-                        ColumnValue('stamp'),
-                        ColumnValue('value_left'),
-                        ColumnValue('other_stamp_'),
-                        ColumnValue('stamp_'),
-                        ColumnValue('value_right'),
-                    ]
-                ),
-            ),
-            (
-                'right',
-                Records(
-                    [
-                        Record(
-                            {
-                                'other_stamp': 4,
-                                'other_stamp_': 2,
-                                'stamp': 1,
-                                'stamp_': 3,
-                                'value_left': 1,
-                                'value_right': 1,
-                            }
-                        ),
-                        Record(
-                            {
-                                'other_stamp_': 6,
-                                'stamp_': 7,
-                                'value_right': 1,
-                            }
-                        ),
-                        Record({'other_stamp_': 10, 'stamp_': 10}),
-                        Record({'other_stamp_': 14, 'value_right': 2}),
-                    ],
-                    [
-                        ColumnValue('other_stamp'),
-                        ColumnValue('stamp'),
-                        ColumnValue('value_left'),
-                        ColumnValue('other_stamp_'),
-                        ColumnValue('stamp_'),
-                        ColumnValue('value_right'),
-                    ]
-                ),
-            ),
-            (
-                'outer',
-                Records(
-                    [
-                        Record(
-                            {
-                                'other_stamp': 4,
-                                'other_stamp_': 2,
-                                'stamp': 1,
-                                'stamp_': 3,
-                                'value_left': 1,
-                                'value_right': 1,
-                            }
-                        ),
-                        Record(
-                            {
-                                'other_stamp_': 6,
-                                'stamp_': 7,
-                                'value_right': 1,
-                            }
-                        ),
-                        Record({'other_stamp': 12, 'stamp': 9, 'value_left': 1}),
-                        Record({'other_stamp_': 10, 'stamp_': 10}),
-                        Record({'other_stamp': 8}),
-                        Record({'other_stamp': 16}),
-                        Record({'other_stamp_': 14, 'value_right': 2}),
-                    ],
-                    [
-                        ColumnValue('other_stamp'),
-                        ColumnValue('stamp'),
-                        ColumnValue('value_left'),
-                        ColumnValue('other_stamp_'),
-                        ColumnValue('stamp_'),
-                        ColumnValue('value_right'),
-                    ]
-                ),
-            ),
-        ],
-    )
-    def test_merge_sequential_with_loss(self, how, expect_records_py):
-        left_records_py = Records(
-            [
-                Record({'other_stamp': 4, 'stamp': 1, 'value_left': 1}),
-                Record({'other_stamp': 8}),
-                Record({'other_stamp': 12, 'stamp': 9, 'value_left': 1}),
-                Record({'other_stamp': 16}),
-            ],
-            [ColumnValue('other_stamp'), ColumnValue('stamp'), ColumnValue('value_left')]
-        )
-
-        right_records_py = Records(
-            [
-                Record({'other_stamp_': 2, 'stamp_': 3, 'value_right': 1}),
-                Record({'other_stamp_': 6, 'stamp_': 7, 'value_right': 1}),
-                Record({'other_stamp_': 10, 'stamp_': 10}),
-                Record({'other_stamp_': 14, 'value_right': 2}),
-            ],
-            [ColumnValue('other_stamp_'), ColumnValue('stamp_'), ColumnValue('value_right')]
-        )
-
-        for left_records, right_records, expect_records in zip(
-            [left_records_py, to_cpp_records(left_records_py)],
-            [right_records_py, to_cpp_records(right_records_py)],
-            [expect_records_py, to_cpp_records(expect_records_py)],
-        ):
-            if left_records is None and not CppImplEnabled:
-                continue
-
-            merged = left_records.merge_sequential(
-                right_records=right_records,
-                left_stamp_key='stamp',
-                right_stamp_key='stamp_',
-                join_left_key='value_left',
-                join_right_key='value_right',
-                columns=['other_stamp', 'stamp', 'value_left',
-                         'other_stamp_', 'stamp_', 'value_right'],
-                how=how,
+            right_records_py: Records = Records(
+                [
+                    Record({'key_right': 2, 'sub_stamp': 2}),
+                    Record({'key_right': 1, 'sub_stamp': 3}),
+                    Record({'key_right': 1, 'sub_stamp': 4}),
+                    Record({'key_right': 2, 'sub_stamp': 5}),
+                ],
+                [ColumnValue('key_right'), ColumnValue('sub_stamp')]
             )
 
-            assert merged.equals(expect_records) is True
+            for left_records, right_records, expect_records in zip(
+                [left_records_py, to_cpp_records(left_records_py)],
+                [right_records_py, to_cpp_records(right_records_py)],
+                [expect_records_py, to_cpp_records(expect_records_py)],
+            ):
+                if left_records is None and not CppImplEnabled:
+                    continue
+
+                merged_records = left_records.merge_sequential(
+                    right_records=right_records,
+                    left_stamp_key='stamp',
+                    right_stamp_key='sub_stamp',
+                    join_left_key='key_left',
+                    join_right_key='key_right',
+                    columns=['key_left', 'stamp', 'key_right', 'sub_stamp'],
+                    how=how,
+                )
+
+                assert merged_records.equals(expect_records)
+
+        @pytest.mark.parametrize(
+            'how, expect_records_py',
+            [
+                (
+                    'inner',
+                    Records(
+                        [
+                            Record({'key': 1, 'stamp': 0, 'sub_stamp': 3}),
+                            Record({'key': 2, 'stamp': 1, 'sub_stamp': 2}),
+                        ],
+                        [ColumnValue('key'), ColumnValue('stamp'), ColumnValue('sub_stamp')]
+                    ),
+                ),
+                (
+                    'left',
+                    Records(
+                        [
+                            Record({'key': 1, 'stamp': 0, 'sub_stamp': 3}),
+                            Record({'key': 2, 'stamp': 1, 'sub_stamp': 2}),
+                            Record({'key': 1, 'stamp': 6}),
+                            Record({'key': 2, 'stamp': 7}),
+                        ],
+                        [ColumnValue('key'), ColumnValue('stamp'), ColumnValue('sub_stamp')]
+                    ),
+                ),
+                (
+                    'left_use_latest',
+                    Records(
+                        [
+                            Record({'key': 1, 'stamp': 0, 'sub_stamp': 3}),
+                            Record({'key': 1, 'stamp': 0, 'sub_stamp': 4}),
+                            Record({'key': 2, 'stamp': 1, 'sub_stamp': 2}),
+                            Record({'key': 2, 'stamp': 1, 'sub_stamp': 5}),
+                            Record({'key': 1, 'stamp': 6}),
+                            Record({'key': 2, 'stamp': 7}),
+                        ],
+                        [ColumnValue('key'), ColumnValue('stamp'), ColumnValue('sub_stamp')]
+                    ),
+                ),
+                (
+                    'right',
+                    Records(
+                        [
+                            Record({'key': 1, 'stamp': 0, 'sub_stamp': 3}),
+                            Record({'key': 2, 'stamp': 1, 'sub_stamp': 2}),
+                            Record({'key': 1, 'sub_stamp': 4}),
+                            Record({'key': 2, 'sub_stamp': 5}),
+                        ],
+                        [ColumnValue('key'), ColumnValue('stamp'), ColumnValue('sub_stamp')]
+                    ),
+                ),
+                (
+                    'outer',
+                    Records(
+                        [
+                            Record({'key': 1, 'stamp': 0, 'sub_stamp': 3}),
+                            Record({'key': 2, 'stamp': 1, 'sub_stamp': 2}),
+                            Record({'key': 1, 'sub_stamp': 4}),
+                            Record({'key': 2, 'sub_stamp': 5}),
+                            Record({'key': 1, 'stamp': 6}),
+                            Record({'key': 2, 'stamp': 7}),
+                        ],
+                        [ColumnValue('key'), ColumnValue('stamp'), ColumnValue('sub_stamp')]
+                    ),
+                ),
+            ],
+        )
+        def test_duplicated_key_case(self, how, expect_records_py):
+            left_records_py: Records = Records(
+                [
+                    Record({'key': 1, 'stamp': 0}),
+                    Record({'key': 2, 'stamp': 1}),
+                    Record({'key': 1, 'stamp': 6}),
+                    Record({'key': 2, 'stamp': 7}),
+                ],
+                [ColumnValue('key'), ColumnValue('stamp')]
+            )
+
+            right_records_py: Records = Records(
+                [
+                    Record({'key': 2, 'sub_stamp': 2}),
+                    Record({'key': 1, 'sub_stamp': 3}),
+                    Record({'key': 1, 'sub_stamp': 4}),
+                    Record({'key': 2, 'sub_stamp': 5}),
+                ],
+                [ColumnValue('key'), ColumnValue('sub_stamp')]
+            )
+
+            for left_records, right_records, expect_records in zip(
+                [left_records_py, to_cpp_records(left_records_py)],
+                [right_records_py, to_cpp_records(right_records_py)],
+                [expect_records_py, to_cpp_records(expect_records_py)],
+            ):
+                if left_records is None and not CppImplEnabled:
+                    continue
+
+                merged_records = left_records.merge_sequential(
+                    right_records=right_records,
+                    left_stamp_key='stamp',
+                    right_stamp_key='sub_stamp',
+                    join_left_key='key',
+                    join_right_key='key',
+                    columns=['key', 'stamp', 'sub_stamp'],
+                    how=how,
+                )
+
+                assert merged_records.equals(expect_records)
+
+        @pytest.mark.parametrize(
+            'how, expect_records_py',
+            [
+                (
+                    'inner',
+                    Records(
+                        [
+                            Record({'stamp': 0, 'sub_stamp': 1}),
+                            Record({'stamp': 5, 'sub_stamp': 6}),
+                        ],
+                        [ColumnValue('stamp'), ColumnValue('sub_stamp')]
+                    ),
+                ),
+                (
+                    'left',
+                    Records(
+                        [
+                            Record({'stamp': 0, 'sub_stamp': 1}),
+                            Record({'stamp': 3}),
+                            Record({'stamp': 4}),
+                            Record({'stamp': 5, 'sub_stamp': 6}),
+                            Record({'stamp': 8}),
+                        ],
+                        [ColumnValue('stamp'), ColumnValue('sub_stamp')]
+                    ),
+                ),
+                (
+                    'left_use_latest',
+                    Records(
+                        [
+                            Record({'stamp': 0, 'sub_stamp': 1}),
+                            Record({'stamp': 3}),
+                            Record({'stamp': 4}),
+                            Record({'stamp': 5, 'sub_stamp': 6}),
+                            Record({'stamp': 5, 'sub_stamp': 7}),
+                            Record({'stamp': 8}),
+                        ],
+                        [ColumnValue('stamp'), ColumnValue('sub_stamp')]
+                    ),
+                ),
+                (
+                    'right',
+                    Records(
+                        [
+                            Record({'stamp': 0, 'sub_stamp': 1}),
+                            Record({'stamp': 5, 'sub_stamp': 6}),
+                            Record({'sub_stamp': 7}),
+                        ],
+                        [ColumnValue('stamp'), ColumnValue('sub_stamp')]
+                    ),
+                ),
+                (
+                    'outer',
+                    Records(
+                        [
+                            Record({'stamp': 0, 'sub_stamp': 1}),
+                            Record({'stamp': 3}),
+                            Record({'stamp': 4}),
+                            Record({'stamp': 5, 'sub_stamp': 6}),
+                            Record({'sub_stamp': 7}),
+                            Record({'stamp': 8}),
+                        ],
+                        [ColumnValue('stamp'), ColumnValue('sub_stamp')]
+                    ),
+                ),
+            ],
+        )
+        def test_without_key(self, how, expect_records_py):
+            left_records_py: Records = Records(
+                [
+                    Record({'stamp': 0}),
+                    Record({'stamp': 3}),
+                    Record({'stamp': 4}),
+                    Record({'stamp': 5}),
+                    Record({'stamp': 8}),
+                ],
+                [ColumnValue('stamp')]
+            )
+
+            right_records_py: Records = Records(
+                [
+                    Record({'sub_stamp': 1}),
+                    Record({'sub_stamp': 6}),
+                    Record({'sub_stamp': 7}),
+                ],
+                [ColumnValue('sub_stamp')]
+            )
+
+            for left_records, right_records, expect_records in zip(
+                [left_records_py, to_cpp_records(left_records_py)],
+                [right_records_py, to_cpp_records(right_records_py)],
+                [expect_records_py, to_cpp_records(expect_records_py)],
+            ):
+                if left_records is None and not CppImplEnabled:
+                    continue
+
+                merged = left_records.merge_sequential(
+                    right_records=right_records,
+                    left_stamp_key='stamp',
+                    right_stamp_key='sub_stamp',
+                    join_left_key=None,
+                    join_right_key=None,
+                    columns=['stamp', 'sub_stamp'],
+                    how=how,
+                )
+
+                assert merged.equals(expect_records)
+
+        @pytest.mark.parametrize(
+            'how, expect_records_py',
+            [
+                (
+                    'inner',
+                    Records(
+                        [
+                            Record({'key_left': 1, 'key_right': 1, 'stamp': 0, 'sub_stamp': 2}),
+                            Record({'key_left': 1, 'key_right': 1, 'stamp': 6, 'sub_stamp': 7}),
+                        ],
+                        [
+                            ColumnValue('key_left'),
+                            ColumnValue('stamp'),
+                            ColumnValue('key_right'),
+                            ColumnValue('sub_stamp'),
+                        ]
+                    ),
+                ),
+                (
+                    'left',
+                    Records(
+                        [
+                            Record({'key_left': 1, 'key_right': 1, 'stamp': 0, 'sub_stamp': 2}),
+                            Record({'key_left': 1, 'stamp': 4}),
+                            Record({'key_left': 1, 'stamp': 5}),
+                            Record({'key_left': 1, 'key_right': 1, 'stamp': 6, 'sub_stamp': 7}),
+                        ],
+                        [
+                            ColumnValue('key_left'),
+                            ColumnValue('stamp'),
+                            ColumnValue('key_right'),
+                            ColumnValue('sub_stamp'),
+                        ]
+                    ),
+                ),
+                (
+                    'left_use_latest',
+                    Records(
+                        [
+                            Record({'key_left': 1, 'key_right': 1,
+                                'stamp': 0, 'sub_stamp': 2}),
+                            Record({'key_left': 1, 'key_right': 1,
+                                'stamp': 0, 'sub_stamp': 3}),
+                            Record({'key_left': 1, 'stamp': 4}),
+                            Record({'key_left': 1, 'stamp': 5}),
+                            Record({'key_left': 1, 'key_right': 1,
+                                'stamp': 6, 'sub_stamp': 7}),
+                        ],
+                        [
+                            ColumnValue('key_left'),
+                            ColumnValue('stamp'),
+                            ColumnValue('key_right'),
+                            ColumnValue('sub_stamp'),
+                        ]
+                    ),
+                ),
+                (
+                    'right',
+                    Records(
+                        [
+                            Record({'key_left': 1, 'key_right': 1, 'stamp': 0, 'sub_stamp': 2}),
+                            Record({'key_right': 3, 'sub_stamp': 1}),
+                            Record({'key_right': 1, 'sub_stamp': 3}),
+                            Record({'key_left': 1, 'key_right': 1, 'stamp': 6, 'sub_stamp': 7}),
+                        ],
+                        [
+                            ColumnValue('key_left'),
+                            ColumnValue('stamp'),
+                            ColumnValue('key_right'),
+                            ColumnValue('sub_stamp'),
+                        ]
+                    ),
+                ),
+                (
+                    'outer',
+                    Records(
+                        [
+                            Record({'key_left': 1, 'key_right': 1, 'stamp': 0, 'sub_stamp': 2}),
+                            Record({'key_right': 3, 'sub_stamp': 1}),
+                            Record({'key_right': 1, 'sub_stamp': 3}),
+                            Record({'key_left': 1, 'stamp': 4}),
+                            Record({'key_left': 1, 'stamp': 5}),
+                            Record({'key_left': 1, 'key_right': 1, 'stamp': 6, 'sub_stamp': 7}),
+                        ],
+                        [
+                            ColumnValue('key_left'),
+                            ColumnValue('stamp'),
+                            ColumnValue('key_right'),
+                            ColumnValue('sub_stamp'),
+                        ]
+                    ),
+                ),
+            ],
+        )
+        def test_drop_case(self, how, expect_records_py):
+            left_records_py: Records = Records(
+                [
+                    Record({'key_left': 1, 'stamp': 0}),
+                    Record({'key_left': 1, 'stamp': 4}),
+                    Record({'key_left': 1, 'stamp': 5}),
+                    Record({'key_left': 1, 'stamp': 6}),
+                ],
+                [ColumnValue('key_left'), ColumnValue('stamp')]
+            )
+
+            right_records_py: Records = Records(
+                [
+                    Record({'key_right': 3, 'sub_stamp': 1}),
+                    Record({'key_right': 1, 'sub_stamp': 2}),
+                    Record({'key_right': 1, 'sub_stamp': 3}),
+                    Record({'key_right': 1, 'sub_stamp': 7}),
+                ],
+                [ColumnValue('key_right'), ColumnValue('sub_stamp')]
+            )
+
+            for left_records, right_records, expect_records in zip(
+                [left_records_py, to_cpp_records(left_records_py)],
+                [right_records_py, to_cpp_records(right_records_py)],
+                [expect_records_py, to_cpp_records(expect_records_py)],
+            ):
+                if left_records is None and not CppImplEnabled:
+                    continue
+
+                merged = left_records.merge_sequential(
+                    right_records=right_records,
+                    left_stamp_key='stamp',
+                    right_stamp_key='sub_stamp',
+                    join_left_key='key_left',
+                    join_right_key='key_right',
+                    columns=['key_left', 'stamp', 'key_right', 'sub_stamp'],
+                    how=how,
+                )
+
+                assert merged.equals(expect_records)
+
+        @pytest.mark.parametrize(
+            'how, expect_records_py',
+            [
+                (
+                    'inner',
+                    Records(
+                        [
+                            Record(
+                                {
+                                    'other_stamp': 4,
+                                    'other_stamp_': 2,
+                                    'stamp': 1,
+                                    'stamp_': 3,
+                                    'value_left': 1,
+                                    'value_right': 1,
+                                }
+                            ),
+                        ],
+                        [
+                            ColumnValue('other_stamp'),
+                            ColumnValue('stamp'),
+                            ColumnValue('value_left'),
+                            ColumnValue('other_stamp_'),
+                            ColumnValue('stamp_'),
+                            ColumnValue('value_right'),
+                        ]
+                    ),
+                ),
+                (
+                    'left',
+                    Records(
+                        [
+                            Record(
+                                {
+                                    'other_stamp': 4,
+                                    'other_stamp_': 2,
+                                    'stamp': 1,
+                                    'stamp_': 3,
+                                    'value_left': 1,
+                                    'value_right': 1,
+                                }
+                            ),
+                            Record({'other_stamp': 12, 'stamp': 9, 'value_left': 1}),
+                            Record({'other_stamp': 8}),
+                            Record({'other_stamp': 16}),
+                        ],
+                        [
+                            ColumnValue('other_stamp'),
+                            ColumnValue('stamp'),
+                            ColumnValue('value_left'),
+                            ColumnValue('other_stamp_'),
+                            ColumnValue('stamp_'),
+                            ColumnValue('value_right'),
+                        ]
+                    ),
+                ),
+                (
+                    'left_use_latest',
+                    Records(
+                        [
+                            Record(
+                                {
+                                    'other_stamp': 4,
+                                    'other_stamp_': 2,
+                                    'stamp': 1,
+                                    'stamp_': 3,
+                                    'value_left': 1,
+                                    'value_right': 1,
+                                }
+                            ),
+                            Record(
+                                {
+                                    'other_stamp': 4,
+                                    'other_stamp_': 6,
+                                    'stamp': 1,
+                                    'stamp_': 7,
+                                    'value_left': 1,
+                                    'value_right': 1,
+                                }
+                            ),
+                            Record({'other_stamp': 12, 'stamp': 9, 'value_left': 1}),
+                            Record({'other_stamp': 8}),
+                            Record({'other_stamp': 16}),
+                        ],
+                        [
+                            ColumnValue('other_stamp'),
+                            ColumnValue('stamp'),
+                            ColumnValue('value_left'),
+                            ColumnValue('other_stamp_'),
+                            ColumnValue('stamp_'),
+                            ColumnValue('value_right'),
+                        ]
+                    ),
+                ),
+                (
+                    'right',
+                    Records(
+                        [
+                            Record(
+                                {
+                                    'other_stamp': 4,
+                                    'other_stamp_': 2,
+                                    'stamp': 1,
+                                    'stamp_': 3,
+                                    'value_left': 1,
+                                    'value_right': 1,
+                                }
+                            ),
+                            Record(
+                                {
+                                    'other_stamp_': 6,
+                                    'stamp_': 7,
+                                    'value_right': 1,
+                                }
+                            ),
+                            Record({'other_stamp_': 10, 'stamp_': 10}),
+                            Record({'other_stamp_': 14, 'value_right': 2}),
+                        ],
+                        [
+                            ColumnValue('other_stamp'),
+                            ColumnValue('stamp'),
+                            ColumnValue('value_left'),
+                            ColumnValue('other_stamp_'),
+                            ColumnValue('stamp_'),
+                            ColumnValue('value_right'),
+                        ]
+                    ),
+                ),
+                (
+                    'outer',
+                    Records(
+                        [
+                            Record(
+                                {
+                                    'other_stamp': 4,
+                                    'other_stamp_': 2,
+                                    'stamp': 1,
+                                    'stamp_': 3,
+                                    'value_left': 1,
+                                    'value_right': 1,
+                                }
+                            ),
+                            Record(
+                                {
+                                    'other_stamp_': 6,
+                                    'stamp_': 7,
+                                    'value_right': 1,
+                                }
+                            ),
+                            Record({'other_stamp': 12, 'stamp': 9, 'value_left': 1}),
+                            Record({'other_stamp_': 10, 'stamp_': 10}),
+                            Record({'other_stamp': 8}),
+                            Record({'other_stamp': 16}),
+                            Record({'other_stamp_': 14, 'value_right': 2}),
+                        ],
+                        [
+                            ColumnValue('other_stamp'),
+                            ColumnValue('stamp'),
+                            ColumnValue('value_left'),
+                            ColumnValue('other_stamp_'),
+                            ColumnValue('stamp_'),
+                            ColumnValue('value_right'),
+                        ]
+                    ),
+                ),
+            ],
+        )
+        def test_with_loss_case(self, how, expect_records_py):
+            left_records_py = Records(
+                [
+                    Record({'other_stamp': 4, 'stamp': 1, 'value_left': 1}),
+                    Record({'other_stamp': 8}),
+                    Record({'other_stamp': 12, 'stamp': 9, 'value_left': 1}),
+                    Record({'other_stamp': 16}),
+                ],
+                [ColumnValue('other_stamp'), ColumnValue('stamp'), ColumnValue('value_left')]
+            )
+
+            right_records_py = Records(
+                [
+                    Record({'other_stamp_': 2, 'stamp_': 3, 'value_right': 1}),
+                    Record({'other_stamp_': 6, 'stamp_': 7, 'value_right': 1}),
+                    Record({'other_stamp_': 10, 'stamp_': 10}),
+                    Record({'other_stamp_': 14, 'value_right': 2}),
+                ],
+                [ColumnValue('other_stamp_'), ColumnValue('stamp_'), ColumnValue('value_right')]
+            )
+
+            for left_records, right_records, expect_records in zip(
+                [left_records_py, to_cpp_records(left_records_py)],
+                [right_records_py, to_cpp_records(right_records_py)],
+                [expect_records_py, to_cpp_records(expect_records_py)],
+            ):
+                if left_records is None and not CppImplEnabled:
+                    continue
+
+                merged = left_records.merge_sequential(
+                    right_records=right_records,
+                    left_stamp_key='stamp',
+                    right_stamp_key='stamp_',
+                    join_left_key='value_left',
+                    join_right_key='value_right',
+                    columns=['other_stamp', 'stamp', 'value_left',
+                            'other_stamp_', 'stamp_', 'value_right'],
+                    how=how,
+                )
+
+                assert merged.equals(expect_records) is True
 
     def test_merge_sequential_for_addr_track(self):
         source_records: Records = Records(
